@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Vent & Temp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #080810;
+      --surface: #0f0f1a;
+      --surface2: #141425;
+      --border: rgba(255,255,255,0.07);
+      --border-hi: rgba(255,255,255,0.14);
+      --txt: #e8e8f0;
+      --muted: rgba(232,232,240,0.45);
+      --accent: #5b8cff;
+      --accent2: #a78bfa;
+      --green: #34d399;
+      --font-display: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      background: var(--bg);
+    }
+
+    body {
+      font-family: var(--font-display);
+      background: var(--bg);
+      color: var(--txt);
+      min-height: 100svh;
+      overflow-x: hidden;
+    }
+
+    /* Subtle background grain */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      background-size: 200px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Glow orb */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -20vh;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 70vw;
+      height: 70vw;
+      max-width: 500px;
+      max-height: 500px;
+      background: radial-gradient(ellipse, rgba(91,140,255,0.08) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 440px;
+      margin: 0 auto;
+      padding: max(env(safe-area-inset-top), 24px) 20px max(env(safe-area-inset-bottom), 24px);
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.55) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-left p {
+      margin-top: 3px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .btn-locate {
+      flex-shrink: 0;
+      background: linear-gradient(135deg, rgba(91,140,255,0.25), rgba(167,139,250,0.15));
+      border: 1px solid rgba(91,140,255,0.35);
+      color: var(--txt);
+      border-radius: 100px;
+      padding: 8px 16px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 180ms ease;
+      white-space: nowrap;
+    }
+
+    .btn-locate:hover { background: linear-gradient(135deg, rgba(91,140,255,0.35), rgba(167,139,250,0.25)); transform: translateY(-1px); }
+    .btn-locate:active { transform: scale(0.97); }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      min-height: 24px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 300ms;
+    }
+
+    .status-dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(52,211,153,0.5); }
+    .status-dot.loading { background: var(--accent); animation: pulse 1s infinite; }
+    .status-dot.error { background: #f87171; }
+
+    @keyframes pulse { 0%,100%{ opacity: 1; } 50%{ opacity: 0.4; } }
+
+    .status-text {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      flex: 1;
+    }
+
+    .auto-refresh-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--accent);
+      background: rgba(91,140,255,0.1);
+      border: 1px solid rgba(91,140,255,0.2);
+      padding: 2px 8px;
+      border-radius: 100px;
+      display: none;
+    }
+
+    .auto-refresh-badge.active { display: block; }
+
+    .error-box {
+      display: none;
+      background: rgba(248,113,113,0.08);
+      border: 1px solid rgba(248,113,113,0.2);
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #fca5a5;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    }
+
+    /* ── Temp card ── */
+    .temp-card {
+      background: linear-gradient(135deg, var(--surface) 0%, #0d0d20 100%);
+    }
+
+    .temp-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .temp-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .temp-value {
+      font-size: 72px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      font-variant-numeric: tabular-nums;
+      background: linear-gradient(150deg, #fff 30%, rgba(255,255,255,0.5) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      transition: all 400ms ease;
+    }
+
+    .temp-unit {
+      font-size: 26px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 10px;
+    }
+
+    .temp-meta {
+      text-align: right;
+    }
+
+    .meta-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .meta-value {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 4px;
+    }
+
+    .meta-coords {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── Unit toggle ── */
+    .unit-toggle {
+      display: flex;
+      gap: 4px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .unit-btn {
+      flex: 1;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 10px;
+      padding: 6px 4px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 150ms ease;
+    }
+
+    .unit-btn.active {
+      background: rgba(91,140,255,0.15);
+      border-color: rgba(91,140,255,0.4);
+      color: #93b4ff;
+    }
+
+    .unit-btn:hover:not(.active) {
+      border-color: var(--border-hi);
+      color: var(--txt);
+    }
+
+    /* ── Wind card ── */
+    .wind-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .wind-stat { margin-bottom: 16px; }
+    .wind-stat:last-child { margin-bottom: 0; }
+
+    .wind-stat-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .wind-stat-main {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .wind-value {
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      color: var(--txt);
+      line-height: 1;
+      transition: all 400ms ease;
+    }
+
+    .wind-unit {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .wind-direction {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-top: 3px;
+    }
+
+    .wind-direction strong { color: var(--txt); }
+
+    .gust-value {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      color: var(--txt);
+      transition: all 400ms ease;
+    }
+
+    /* ── Compass ── */
+    .compass-wrap {
+      position: relative;
+      width: 160px;
+      height: 160px;
+      flex-shrink: 0;
+    }
+
+    .compass-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: radial-gradient(circle, rgba(20,20,37,0.8) 0%, rgba(8,8,16,0.95) 100%);
+      transition: transform 500ms cubic-bezier(0.2,0.8,0.2,1), border-color 400ms, box-shadow 400ms;
+    }
+
+    .compass-labels {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .compass-labels span {
+      position: absolute;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      transform: translate(-50%, -50%);
+    }
+
+    .compass-labels .lN { top: 8px; left: 50%; color: rgba(255,255,255,0.9); }
+    .compass-labels .lS { bottom: 3px; left: 50%; transform: translate(-50%, 50%); color: rgba(255,255,255,0.3); }
+    .compass-labels .lE { right: 5px; top: 50%; transform: translate(50%, -50%); color: rgba(255,255,255,0.3); }
+    .compass-labels .lO { left: 5px; top: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,0.3); }
+
+    .compass-tick {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 1px;
+      height: 8px;
+      background: rgba(255,255,255,0.15);
+      transform-origin: 0.5px 80px;
+      border-radius: 1px;
+    }
+
+    .wind-marker {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 1px;
+      height: 68px;
+      margin-left: -0.5px;
+      margin-top: -68px;
+      transform-origin: 0.5px 68px;
+      transition: transform 500ms cubic-bezier(0.2,0.8,0.2,1);
+    }
+
+    .wind-dot {
+      position: absolute;
+      top: -5px;
+      left: 50%;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.7);
+      transform: translateX(-50%);
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.06);
+      transition: background 400ms, box-shadow 400ms;
+    }
+
+    .needle {
+      position: absolute;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%) rotate(0deg);
+      transform-origin: center;
+      transition: transform 500ms cubic-bezier(0.2,0.8,0.2,1);
+    }
+
+    .compass-center {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .compass-heading {
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* ── Buttons row ── */
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--txt);
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 150ms ease;
+      letter-spacing: -0.01em;
+    }
+
+    .btn:hover:not(:disabled) { background: rgba(255,255,255,0.07); border-color: var(--border-hi); }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-auto {
+      background: rgba(91,140,255,0.1);
+      border-color: rgba(91,140,255,0.25);
+      color: #93b4ff;
+      flex: 0 0 auto;
+    }
+
+    .btn-auto.on {
+      background: rgba(91,140,255,0.2);
+      border-color: rgba(91,140,255,0.5);
+    }
+
+    .btn-auto:hover:not(:disabled) {
+      background: rgba(91,140,255,0.25);
+      border-color: rgba(91,140,255,0.5);
+    }
+
+    /* ── History ── */
+    .history-card { display: none; }
+    .history-card.visible { display: block; }
+
+    .history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .history-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .history-clear {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      transition: color 150ms;
+    }
+
+    .history-clear:hover { color: #f87171; }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .history-item {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--surface2);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      animation: fadeIn 200ms ease;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+    .hist-time {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .hist-temp, .hist-wind {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--txt);
+      font-weight: 500;
+    }
+
+    .hist-dir {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: rgba(255,255,255,0.2);
+      margin-top: 8px;
+      letter-spacing: 0.02em;
+    }
+
+    .data-enter { animation: dataIn 350ms ease forwards; }
+
+    @keyframes dataIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    /* Aligned highlight */
+    .aligned .compass-ring {
+      border-color: rgba(52,211,153,0.4);
+      box-shadow: 0 0 40px rgba(52,211,153,0.12);
+    }
+
+    .aligned .wind-dot {
+      background: rgba(52,211,153,0.95);
+      box-shadow: 0 0 0 6px rgba(52,211,153,0.12);
+    }
+
+    .aligned .needle-path { fill: rgba(52,211,153,0.92); }
+    .aligned .needle-center { fill: rgba(52,211,153,0.92); }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1>Vent & Temp</h1>
+      <p>GPS • Open-Meteo • Boussole</p>
+    </div>
+    <button class="btn-locate" id="btnLocate">📍 Ma position</button>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-text" id="statusText">Prêt — clique sur « Ma position »</span>
+    <span class="auto-refresh-badge" id="autoRefreshBadge">⟳ auto</span>
+  </div>
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Temperature card -->
+  <div class="card temp-card">
+    <div class="temp-row">
+      <div>
+        <div class="temp-label">Température</div>
+        <div style="display:flex;align-items:baseline;gap:4px;">
+          <span class="temp-value" id="temp">—</span>
+          <span class="temp-unit">°C</span>
+        </div>
+      </div>
+      <div class="temp-meta">
+        <div class="meta-label">Mis à jour</div>
+        <div class="meta-value" id="updatedAt">—</div>
+        <div class="meta-coords" id="coords">—</div>
+      </div>
+    </div>
+
+    <!-- Unit toggle -->
+    <div class="unit-toggle">
+      <button class="unit-btn active" data-unit="kmh">km/h</button>
+      <button class="unit-btn" data-unit="ms">m/s</button>
+      <button class="unit-btn" data-unit="knots">nœuds</button>
+      <button class="unit-btn" data-unit="bf">Beaufort</button>
+    </div>
+  </div>
+
+  <!-- Wind card -->
+  <div class="card wind-card" id="compassCard">
+    <div class="wind-grid">
+      <!-- Stats left -->
+      <div class="wind-stats">
+        <div class="wind-stat">
+          <div class="wind-stat-label">Vent moyen</div>
+          <div class="wind-stat-main">
+            <span class="wind-value" id="windSpeed">—</span>
+            <span class="wind-unit" id="windUnitLabel">km/h</span>
+          </div>
+          <div class="wind-direction">
+            Dir. <strong id="windDirText">—</strong>
+            <span style="color:var(--muted)">(<span id="windDirDeg">—</span>°)</span>
+          </div>
+        </div>
+
+        <div class="wind-stat">
+          <div class="wind-stat-label">Rafales</div>
+          <div class="wind-stat-main">
+            <span class="gust-value" id="gustSpeed">—</span>
+            <span class="wind-unit" id="gustUnitLabel">km/h</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compass right -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0;">
+        <div class="compass-wrap" id="compassWrap">
+          <!-- Ring (rotates with heading) -->
+          <div class="compass-ring" id="compassRing"></div>
+
+          <!-- Labels -->
+          <div class="compass-labels" id="compassLabels">
+            <span class="lN">N</span>
+            <span class="lE">E</span>
+            <span class="lS">S</span>
+            <span class="lO">O</span>
+          </div>
+
+          <!-- Generated ticks -->
+          <div id="tickContainer" style="position:absolute;inset:0;border-radius:50%;"></div>
+
+          <!-- Wind direction marker -->
+          <div class="wind-marker" id="windMarker">
+            <div class="wind-dot" id="windDot"></div>
+          </div>
+
+          <!-- Needle -->
+          <div class="needle" id="needle">
+            <svg width="64" height="64" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="20" fill="rgba(0,0,0,0.3)" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+              <path class="needle-path" d="M50 12 C57 24 63 35 67 47 C63 46 57 45 50 45 C43 45 37 46 33 47 C37 35 43 24 50 12Z" fill="rgba(255,255,255,0.88)"/>
+              <path d="M50 45 C57 45 63 46 67 47 C65 52 62 57 59 61 C56 58 54 55 50 55 C46 55 44 58 41 61 C38 57 35 52 33 47 C37 46 43 45 50 45Z" fill="rgba(255,255,255,0.15)"/>
+              <circle class="needle-center" cx="50" cy="50" r="5" fill="rgba(255,255,255,0.85)"/>
+            </svg>
+          </div>
+
+          <div class="compass-center"></div>
+        </div>
+        <div class="compass-heading" id="headingText">—</div>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="btn-row">
+      <button class="btn" id="btnRefresh" disabled>Rafraîchir</button>
+      <button class="btn btn-auto" id="btnAuto">⟳ Auto</button>
+      <button class="btn" id="btnDemo" style="flex:0 0 auto;">Démo</button>
+    </div>
+
+    <p style="margin-top:12px;font-family:var(--font-mono);font-size:10px;color:var(--muted);line-height:1.6;">
+      La boussole aligne le vent sur ton orientation (±10°). Vert = aligné.
+    </p>
+  </div>
+
+  <!-- History -->
+  <div class="card history-card" id="historyCard">
+    <div class="history-header">
+      <span class="history-title">Historique</span>
+      <button class="history-clear" id="btnClearHistory">Effacer</button>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+  <div class="footer">Données: Open-Meteo • Direction 0°=Nord</div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  // ── State ──
+  let lastCoords = null;
+  let windDirDeg = null;
+
+  // raw sensor and smoothed heading
+  let headingDeg = null;
+  let smoothedHeading = null;
+
+  let currentUnit = 'kmh';
+  let rawWindKmh = null;
+  let rawGustKmh = null;
+  let autoRefreshTimer = null;
+  let autoRefreshOn = false;
+  const history = [];
+
+  const TOLERANCE = 10;
+  const AUTO_INTERVAL = 60000; // 60s
+
+  // ── Compass stability (NEW) ──
+  let aligned = false;               // state with hysteresis
+  const ALIGN_ON = 10;               // <= 10° -> ON
+  const ALIGN_OFF = 14;              // >= 14° -> OFF (prevents flicker)
+  const HEADING_ALPHA = 0.14;        // smoothing factor 0.10-0.20
+  const MAX_JUMP = 45;               // snap if sensor jumps too much
+
+  // ── Unit conversion ──
+  const units = {
+    kmh:   { label: 'km/h',   convert: v => v,                 decimals: 0 },
+    ms:    { label: 'm/s',    convert: v => v / 3.6,           decimals: 1 },
+    knots: { label: 'nœuds',  convert: v => v / 1.852,         decimals: 1 },
+    bf:    { label: 'Bf',     convert: v => kmhToBeaufort(v),  decimals: 0 },
+  };
+
+  function kmhToBeaufort(v) {
+    const scale = [0,1,5,11,19,28,38,49,61,74,88,102,117];
+    for (let i = scale.length - 1; i >= 0; i--) {
+      if (v >= scale[i]) return i;
+    }
+    return 0;
+  }
+
+  function convertWind(kmh) {
+    if (kmh === null || kmh === undefined) return '—';
+    const u = units[currentUnit];
+    return u.convert(kmh).toFixed(u.decimals);
+  }
+
+  function windUnitLabel() { return units[currentUnit].label; }
+
+  // ── Status ──
+  function setStatus(msg, state = 'idle') {
+    $('statusText').textContent = msg;
+    const dot = $('statusDot');
+    dot.className = 'status-dot ' + (state === 'ok' ? 'ok' : state === 'loading' ? 'loading' : state === 'error' ? 'error' : '');
+  }
+
+  function setError(msg) {
+    const box = $('errorBox');
+    if (!msg) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    box.textContent = msg;
+  }
+
+  // ── Compass helpers ──
+  function wrap360(d) { return ((d % 360) + 360) % 360; }
+
+  function degToCompass(deg) {
+    if (deg == null || isNaN(deg)) return '—';
+    const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
+    return dirs[Math.round((deg % 360) / 22.5) % 16];
+  }
+
+  function shortestDiff(a, b) {
+    let d = wrap360(b) - wrap360(a);
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    return d;
+  }
+
+  function angleToRad(a) { return (a * Math.PI) / 180; }
+  function radToAngle(r) { return (r * 180) / Math.PI; }
+
+  // circular exponential smoothing (stable across 359° -> 0°)
+  function smoothAngle(prev, next, alpha) {
+    if (prev == null) return wrap360(next);
+
+    const jump = Math.abs(shortestDiff(prev, next));
+    if (jump > MAX_JUMP) return wrap360(next);
+
+    const p = angleToRad(prev);
+    const n = angleToRad(next);
+
+    const px = Math.cos(p), py = Math.sin(p);
+    const nx = Math.cos(n), ny = Math.sin(n);
+
+    const x = (1 - alpha) * px + alpha * nx;
+    const y = (1 - alpha) * py + alpha * ny;
+
+    return wrap360(radToAngle(Math.atan2(y, x)));
+  }
+
+  function isHeadingReliable(evt) {
+    // iOS: webkitCompassAccuracy in degrees. smaller is better.
+    if (typeof evt.webkitCompassAccuracy === 'number') {
+      return evt.webkitCompassAccuracy >= 0 && evt.webkitCompassAccuracy <= 25;
+    }
+    return true; // unknown => accept
+  }
+
+  // ── Build compass ticks ──
+  (function buildTicks() {
+    const container = $('tickContainer');
+    for (let i = 0; i < 24; i++) {
+      const tick = document.createElement('div');
+      tick.className = 'compass-tick';
+      tick.style.transform = `rotate(${i * 15}deg)`;
+      tick.style.opacity = i % 6 === 0 ? '0' : '0.12';
+      container.appendChild(tick);
+    }
+  })();
+
+  // ── Update compass visuals (FIXED) ──
+  function updateCompass() {
+    const ring = $('compassRing');
+    const windMarker = $('windMarker');
+    const needle = $('needle');
+    const headingText = $('headingText');
+    const wrap = $('compassWrap');
+
+    if (smoothedHeading == null || isNaN(smoothedHeading)) {
+      headingText.textContent = '—';
+      ring.style.transform = `rotate(0deg)`;
+      needle.style.transform = `translate(-50%, -50%) rotate(0deg)`;
+
+      if (windDirDeg != null && !isNaN(windDirDeg)) {
+        // show absolute wind if no heading
+        windMarker.style.transform = `rotate(${wrap360(windDirDeg)}deg)`;
+      }
+
+      aligned = false;
+      wrap.classList.remove('aligned');
+      return;
+    }
+
+    const hw = wrap360(smoothedHeading);
+    headingText.textContent = degToCompass(hw) + ' ' + Math.round(hw) + '°';
+
+    // rotate ring with filtered heading
+    ring.style.transform = `rotate(${-hw}deg)`;
+
+    // needle stays up for a clean UI
+    needle.style.transform = `translate(-50%, -50%) rotate(0deg)`;
+
+    if (windDirDeg != null && !isNaN(windDirDeg)) {
+      const rel = wrap360(windDirDeg - hw);
+      windMarker.style.transform = `rotate(${rel}deg)`;
+
+      const diff = Math.abs(shortestDiff(hw, windDirDeg));
+
+      // hysteresis to avoid flicker
+      if (!aligned && diff <= ALIGN_ON) aligned = true;
+      if (aligned && diff >= ALIGN_OFF) aligned = false;
+
+      wrap.classList.toggle('aligned', aligned);
+    } else {
+      aligned = false;
+      wrap.classList.remove('aligned');
+    }
+  }
+
+  // ── Render weather ──
+  function renderWeather(data, lat, lon) {
+    const cur = data?.current ?? {};
+    const temp = cur.temperature_2m ?? null;
+    rawWindKmh = cur.wind_speed_10m ?? null;
+    rawGustKmh = cur.wind_gusts_10m ?? null;
+    const wd = cur.wind_direction_10m ?? null;
+    windDirDeg = wd != null ? Number(wd) : null;
+
+    const tempEl = $('temp');
+    tempEl.textContent = temp != null ? Number(temp).toFixed(1) : '—';
+    tempEl.classList.remove('data-enter');
+    void tempEl.offsetWidth;
+    tempEl.classList.add('data-enter');
+
+    $('windSpeed').textContent = convertWind(rawWindKmh);
+    $('gustSpeed').textContent = convertWind(rawGustKmh);
+    $('windUnitLabel').textContent = windUnitLabel();
+    $('gustUnitLabel').textContent = windUnitLabel();
+    $('windDirDeg').textContent = wd ?? '—';
+    $('windDirText').textContent = degToCompass(wd);
+
+    $('updatedAt').textContent = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    $('coords').textContent = `${Number(lat).toFixed(4)}°, ${Number(lon).toFixed(4)}°`;
+    $('btnRefresh').disabled = false;
+
+    addHistory(temp, rawWindKmh, wd);
+    updateCompass();
+  }
+
+  // ── History ──
+  function addHistory(temp, windKmh, wd) {
+    const entry = {
+      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      temp: temp != null ? Number(temp).toFixed(1) + '°C' : '—',
+      wind: windKmh != null ? Math.round(windKmh) + ' km/h' : '—',
+      dir: degToCompass(wd),
+    };
+    history.unshift(entry);
+    if (history.length > 5) history.pop();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const card = $('historyCard');
+    const list = $('historyList');
+    if (history.length === 0) {
+      card.classList.remove('visible');
+      return;
+    }
+    card.classList.add('visible');
+    list.innerHTML = history.map(h => `
+      <div class="history-item">
+        <span class="hist-time">${h.time}</span>
+        <span class="hist-temp">${h.temp}</span>
+        <span class="hist-wind">${h.wind}</span>
+        <span class="hist-dir">${h.dir}</span>
+      </div>
+    `).join('');
+  }
+
+  // ── Fetch weather ──
+  async function fetchWeather(lat, lon) {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kmh&timezone=auto`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error('Erreur API météo (HTTP ' + res.status + ')');
+    return res.json();
+  }
+
+  async function runWithCoords(lat, lon) {
+    setError(null);
+    setStatus('Récupération météo…', 'loading');
+    $('btnRefresh').disabled = true;
+
+    try {
+      const data = await fetchWeather(lat, lon);
+      renderWeather(data, lat, lon);
+      lastCoords = { lat, lon };
+      setStatus('Données à jour', 'ok');
+    } catch (err) {
+      setStatus('Erreur', 'error');
+      setError(err?.message || 'Erreur inconnue');
+      $('btnRefresh').disabled = false;
+    }
+  }
+
+  // ── Auto refresh ──
+  function toggleAutoRefresh() {
+    autoRefreshOn = !autoRefreshOn;
+    const btn = $('btnAuto');
+    const badge = $('autoRefreshBadge');
+
+    if (autoRefreshOn) {
+      btn.classList.add('on');
+      btn.textContent = '⟳ Stop';
+      badge.classList.add('active');
+      autoRefreshTimer = setInterval(() => {
+        if (lastCoords) runWithCoords(lastCoords.lat, lastCoords.lon);
+      }, AUTO_INTERVAL);
+    } else {
+      btn.classList.remove('on');
+      btn.textContent = '⟳ Auto';
+      badge.classList.remove('active');
+      clearInterval(autoRefreshTimer);
+    }
+  }
+
+  // ── Geolocation ──
+  function requestLocation() {
+    setError(null);
+    if (!('geolocation' in navigator)) {
+      setError('Géolocalisation non supportée par ce navigateur.');
+      return;
+    }
+    setStatus('Demande de position…', 'loading');
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        setStatus('Position obtenue.', 'loading');
+        await runWithCoords(pos.coords.latitude, pos.coords.longitude);
+      },
+      err => {
+        const msgs = {
+          1: 'Accès à la position refusé. Autorise dans les réglages du navigateur.',
+          2: 'Position indisponible (GPS/réseau).',
+          3: 'Délai dépassé.',
+        };
+        setStatus('Position refusée', 'error');
+        setError(msgs[err.code] || 'Impossible de récupérer la position.');
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 20000 }
+    );
+  }
+
+  // ── Device orientation (compass) ──
+  function handleOrientation(evt) {
+    if (!isHeadingReliable(evt)) return;
+
+    let h = typeof evt.webkitCompassHeading === 'number'
+      ? evt.webkitCompassHeading
+      : typeof evt.alpha === 'number'
+        ? 360 - evt.alpha
+        : null;
+
+    if (h == null || isNaN(h)) return;
+
+    headingDeg = wrap360(h);
+    smoothedHeading = smoothAngle(smoothedHeading, headingDeg, HEADING_ALPHA);
+    updateCompass();
+  }
+
+  async function enableCompass() {
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted') {
+          setStatus('Boussole non autorisée', 'error');
+          return;
+        }
+      }
+      window.addEventListener('deviceorientation', handleOrientation, true);
+    } catch (e) {
+      console.warn('Compass error:', e);
+    }
+  }
+
+  // ── Unit toggle ──
+  document.querySelectorAll('.unit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentUnit = btn.dataset.unit;
+
+      $('windUnitLabel').textContent = windUnitLabel();
+      $('gustUnitLabel').textContent = windUnitLabel();
+
+      if (rawWindKmh !== null) {
+        $('windSpeed').textContent = convertWind(rawWindKmh);
+        $('gustSpeed').textContent = convertWind(rawGustKmh);
+      }
+    });
+  });
+
+  // ── Events ──
+  $('btnLocate').addEventListener('click', async () => {
+    await enableCompass();
+    requestLocation();
+  });
+
+  $('btnRefresh').addEventListener('click', () => {
+    if (lastCoords) runWithCoords(lastCoords.lat, lastCoords.lon);
+  });
+
+  $('btnDemo').addEventListener('click', async () => {
+    await enableCompass();
+    await runWithCoords(48.0794, 7.3585); // Colmar
+  });
+
+  $('btnAuto').addEventListener('click', toggleAutoRefresh);
+
+  $('btnClearHistory').addEventListener('click', () => {
+    history.length = 0;
+    renderHistory();
+  });
+</script>
+</body>
+</html>

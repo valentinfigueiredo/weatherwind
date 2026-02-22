@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Vent & Temp — Boussole Vent</title>
+  <style>
+    :root{
+      --bg: #0b1020;
+
+      --outer: #f4f7ff;
+      --outer-shadow: 0 30px 70px rgba(10,20,40,.25);
+
+      --inner: #ffffff;
+      --inner-shadow: inset 0 2px 6px rgba(10,20,40,.08);
+
+      --tick: rgba(22,63,140,.55);
+      --tick-soft: rgba(22,63,140,.25);
+
+      --label: rgba(8,18,40,.85);
+      --label-soft: rgba(8,18,40,.45);
+
+      --north: #ff5b57;
+      --arrow: rgba(8,18,40,.92);
+
+      --green: rgba(52,211,153,.95);
+      --green-soft: rgba(52,211,153,.18);
+      --blue: rgba(90,170,255,.40);
+    }
+
+    body{
+      margin:0;
+      min-height:100svh;
+      display:grid;
+      place-items:center;
+      background: radial-gradient(1200px 700px at 50% -10%, rgba(110,160,255,.35), transparent 55%),
+                  radial-gradient(900px 600px at 50% 110%, rgba(255,255,255,.06), transparent 60%),
+                  var(--bg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color: white;
+    }
+
+    .wrap{ display:grid; gap:14px; justify-items:center; padding: 18px; }
+
+    .top{
+      width: min(420px, 92vw);
+      display:flex;
+      gap:10px;
+      justify-content:space-between;
+      align-items:center;
+      color: rgba(255,255,255,.75);
+      font-size: 12px;
+    }
+
+    .btn{
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.14);
+      color:white;
+      padding:10px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+    }
+    .btn:active{ transform: scale(.98); }
+
+    .compass{
+      width: 240px;
+      height: 240px;
+      position: relative;
+      border-radius: 999px;
+      background:
+        radial-gradient(circle at 50% 40%, var(--blue), transparent 58%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,.65), rgba(255,255,255,.45) 55%, rgba(255,255,255,.30) 75%, rgba(255,255,255,.0) 100%),
+        var(--outer);
+      box-shadow: var(--outer-shadow);
+      overflow: visible;
+    }
+
+    /* Outer “blue arcs” */
+    .compass::before{
+      content:"";
+      position:absolute;
+      inset:-18px;
+      border-radius: 999px;
+      background:
+        conic-gradient(from 200deg,
+          transparent 0 190deg,
+          rgba(140,210,255,.0) 190deg,
+          rgba(140,210,255,.65) 212deg,
+          rgba(140,210,255,.25) 245deg,
+          rgba(140,210,255,.0) 280deg,
+          transparent 280deg 360deg);
+      opacity: .9;
+      z-index: 0;
+      pointer-events:none;
+    }
+
+    /* Fixed cardinals like iOS: N is red */
+    .cardinals{
+      position:absolute;
+      inset:0;
+      z-index: 4;
+      pointer-events:none;
+    }
+    .cardinals span{
+      position:absolute;
+      font-weight: 800;
+      font-size: 24px;
+      color: var(--label);
+      user-select:none;
+    }
+    .cardinals .n { right: 38px; bottom: 40px; color: var(--north); font-weight: 900; }
+    .cardinals .s { left: 78px; top: 42px; color: var(--label); }
+    .cardinals .e { left: 42px; bottom: 76px; color: var(--label-soft); }
+    .cardinals .w { right: 42px; top: 78px; color: var(--label); }
+
+    /* Inner dial */
+    .dial{
+      position:absolute;
+      inset: 36px;
+      border-radius: 999px;
+      background: var(--inner);
+      box-shadow: var(--inner-shadow);
+      border: 1px solid rgba(10,20,40,.06);
+      z-index: 2;
+      overflow:hidden;
+    }
+
+    /* Plate rotates with heading (north tracking) */
+    .plate{
+      position:absolute;
+      inset:0;
+      border-radius:999px;
+      transform: rotate(0deg);
+      transform-origin: 50% 50%;
+      transition: transform 420ms cubic-bezier(.2,.8,.2,1);
+    }
+
+    .ticks{ position:absolute; inset:0; border-radius:999px; }
+
+    .tick{
+      position:absolute;
+      left:50%;
+      top:0;
+      width:2px;
+      height:12px;
+      background: var(--tick);
+      transform-origin: 1px 84px;
+      border-radius:2px;
+      opacity:.85;
+    }
+    .tick.small{
+      width:1.5px;
+      height:7px;
+      background: var(--tick-soft);
+      opacity:.9;
+    }
+
+    .deg{
+      position:absolute;
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      color: rgba(22,63,140,.75);
+      user-select:none;
+    }
+    .deg.d180 { left: 50%; top: 16px; transform: translateX(-50%); }
+    .deg.d90  { left: 16px; top: 50%; transform: translateY(-50%) rotate(-90deg); }
+    .deg.d270 { right: 16px; top: 50%; transform: translateY(-50%) rotate(90deg); }
+
+    /* Center cap smaller */
+    .cap{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width: 64px;
+      height: 64px;
+      transform: translate(-50%,-50%);
+      border-radius:999px;
+      background:
+        radial-gradient(circle at 50% 40%, rgba(255,255,255,.96), rgba(245,250,255,.92) 60%, rgba(220,235,255,.85) 100%);
+      border: 1px solid rgba(40,90,160,.10);
+      box-shadow: 0 10px 26px rgba(10,20,40,.12);
+      z-index: 6;
+      display:grid;
+      place-items:center;
+    }
+
+    /* Wind arrow: rotates relative to phone heading */
+    .wind-arrow{
+      width: 40px;
+      height: 40px;
+      transform: rotate(0deg);
+      transform-origin: 50% 50%;
+      transition: transform 420ms cubic-bezier(.2,.8,.2,1);
+      filter: drop-shadow(0 8px 14px rgba(0,0,0,.12));
+    }
+
+    /* Highlight (aligned state) */
+    .aligned .dial{
+      box-shadow: 0 0 0 10px var(--green-soft), var(--inner-shadow);
+      border-color: rgba(52,211,153,.25);
+    }
+    .aligned .wind-arrow .main { fill: var(--green); }
+    .aligned .cap{
+      box-shadow: 0 0 0 10px rgba(52,211,153,.10), 0 10px 26px rgba(10,20,40,.12);
+      border-color: rgba(52,211,153,.25);
+    }
+
+    .hud{
+      font-size: 12px;
+      opacity: .78;
+      font-variant-numeric: tabular-nums;
+      text-align:center;
+      line-height: 1.4;
+    }
+    .hud strong{ color: rgba(255,255,255,.92); font-weight: 700; }
+
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:center;
+      width: min(420px, 92vw);
+    }
+    .chip{
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.14);
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: rgba(255,255,255,.82);
+    }
+    input[type="range"]{ width: min(420px, 92vw); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div id="status">Prêt.</div>
+      <button class="btn" id="btnEnable">Activer boussole</button>
+    </div>
+
+    <div class="compass" id="compass">
+      <div class="cardinals">
+        <span class="s">S</span>
+        <span class="w">W</span>
+        <span class="e">E</span>
+        <span class="n">N</span>
+      </div>
+
+      <div class="dial">
+        <div class="plate" id="plate">
+          <div class="ticks" id="ticks"></div>
+          <div class="deg d180">180°</div>
+          <div class="deg d90">90°</div>
+          <div class="deg d270">270°</div>
+        </div>
+      </div>
+
+      <div class="cap">
+        <!-- Wind arrow -->
+        <svg class="wind-arrow" id="windArrow" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+          <path class="main"
+            d="M50 10
+               C60 26 70 41 76 55
+               C68 53 60 52 50 52
+               C40 52 32 53 24 55
+               C30 41 40 26 50 10 Z"
+            fill="var(--arrow)"
+            stroke="rgba(255,255,255,.10)"
+            stroke-width="1"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M44 52
+               C46 60 47.5 69 50 82
+               C52.5 69 54 60 56 52
+               C54 51.6 52 51.4 50 51.4
+               C48 51.4 46 51.6 44 52 Z"
+            fill="rgba(8,18,40,.78)"
+          />
+          <path
+            d="M50 17
+               C56 28 62 38 66 48
+               C60 47 55.5 46.6 50 46.6
+               C44.5 46.6 40 47 34 48
+               C38 38 44 28 50 17 Z"
+            fill="rgba(255,255,255,.10)"
+          />
+        </svg>
+      </div>
+    </div>
+
+    <div class="hud" id="hud">
+      Heading: <strong id="h">—</strong>° · Vent: <strong id="w">—</strong>° · Relatif: <strong id="r">—</strong>°
+      <div style="margin-top:4px; opacity:.8;">Vert si tu es aligné avec le vent (±10°)</div>
+    </div>
+
+    <!-- Démo vent -->
+    <div class="row">
+      <span class="chip">Démo: change la direction du vent</span>
+    </div>
+    <input id="windSlider" type="range" min="0" max="359" value="90" />
+  </div>
+
+  <script>
+    const plate = document.getElementById('plate');
+    const ticks = document.getElementById('ticks');
+    const windArrow = document.getElementById('windArrow');
+    const compass = document.getElementById('compass');
+
+    const statusEl = document.getElementById('status');
+    const hEl = document.getElementById('h');
+    const wEl = document.getElementById('w');
+    const rEl = document.getElementById('r');
+
+    // Build ticks: every 10°, longer every 30°
+    for (let i=0;i<36;i++){
+      const deg = i*10;
+      const t = document.createElement('div');
+      const isLong = deg % 30 === 0;
+      t.className = 'tick' + (isLong ? '' : ' small');
+      t.style.transform = `translateX(-50%) rotate(${deg}deg)`;
+      ticks.appendChild(t);
+    }
+
+    // ===== State =====
+    let windDirDeg = 90;   // demo initial
+    let rawHeading = null; // sensor
+    let smoothHeading = null;
+    let aligned = false;
+
+    // tolerance + hysteresis
+    const ALIGN_ON = 10;
+    const ALIGN_OFF = 14;
+
+    // smoothing
+    const ALPHA = 0.14;
+    const MAX_JUMP = 45;
+
+    function wrap360(d){ return ((d % 360) + 360) % 360; }
+    function shortestDiff(a,b){
+      let d = wrap360(b) - wrap360(a);
+      if (d > 180) d -= 360;
+      if (d < -180) d += 360;
+      return d;
+    }
+
+    function angleToRad(a){ return a * Math.PI / 180; }
+    function radToAngle(r){ return r * 180 / Math.PI; }
+
+    function smoothAngle(prev, next, alpha){
+      if (prev == null) return wrap360(next);
+
+      const jump = Math.abs(shortestDiff(prev, next));
+      if (jump > MAX_JUMP) return wrap360(next);
+
+      const p = angleToRad(prev), n = angleToRad(next);
+      const px = Math.cos(p), py = Math.sin(p);
+      const nx = Math.cos(n), ny = Math.sin(n);
+
+      const x = (1-alpha)*px + alpha*nx;
+      const y = (1-alpha)*py + alpha*ny;
+
+      return wrap360(radToAngle(Math.atan2(y,x)));
+    }
+
+    function isHeadingReliable(evt){
+      if (typeof evt.webkitCompassAccuracy === 'number') {
+        return evt.webkitCompassAccuracy >= 0 && evt.webkitCompassAccuracy <= 25;
+      }
+      return true;
+    }
+
+    // Core render:
+    // - plate rotates with heading (north tracking)
+    // - arrow rotates to show wind direction relative to phone (wind - heading)
+    // - green when relative angle ~ 0 (meaning you face the wind direction)
+    function render(){
+      if (smoothHeading == null) return;
+
+      const h = wrap360(smoothHeading);
+      const w = wrap360(windDirDeg);
+
+      // dial follows north: rotate in opposite direction (classic compass)
+      plate.style.transform = `rotate(${-h}deg)`;
+
+      // arrow is wind direction RELATIVE to your facing direction
+      const rel = wrap360(w - h); // 0 => wind straight ahead
+      windArrow.style.transform = `rotate(${rel}deg)`;
+
+      // alignment is: is rel close to 0 (or 360)
+      const diff = Math.min(rel, 360 - rel); // 0..180
+
+      if (!aligned && diff <= ALIGN_ON) aligned = true;
+      if (aligned && diff >= ALIGN_OFF) aligned = false;
+
+      compass.classList.toggle('aligned', aligned);
+
+      hEl.textContent = Math.round(h);
+      wEl.textContent = Math.round(w);
+      rEl.textContent = Math.round(rel);
+    }
+
+    // ===== Sensor =====
+    function handleOrientation(evt){
+      if (!isHeadingReliable(evt)) return;
+
+      let h = null;
+      if (typeof evt.webkitCompassHeading === 'number') h = evt.webkitCompassHeading;
+      else if (typeof evt.alpha === 'number') h = 360 - evt.alpha;
+
+      if (h == null || Number.isNaN(h)) return;
+
+      rawHeading = wrap360(h);
+      smoothHeading = smoothAngle(smoothHeading, rawHeading, ALPHA);
+      render();
+    }
+
+    async function enableCompass(){
+      try{
+        if (typeof DeviceOrientationEvent !== 'undefined' &&
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== 'granted') {
+            statusEl.textContent = 'Boussole non autorisée.';
+            return;
+          }
+        }
+        window.addEventListener('deviceorientation', handleOrientation, true);
+        statusEl.textContent = 'Boussole active. Tourne le téléphone.';
+      }catch(e){
+        console.warn(e);
+        statusEl.textContent = 'Boussole indisponible sur ce navigateur.';
+      }
+    }
+
+    document.getElementById('btnEnable').addEventListener('click', enableCompass);
+
+    // ===== Demo wind =====
+    const windSlider = document.getElementById('windSlider');
+    windSlider.addEventListener('input', (e)=>{
+      windDirDeg = Number(e.target.value);
+      if (smoothHeading == null) smoothHeading = 0; // allow demo without sensor
+      render();
+    });
+
+    // init demo
+    smoothHeading = 0;
+    render();
+  </script>
+</body>
+</html>

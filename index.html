@@ -1,459 +1,511 @@
 <!doctype html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Vent & Temp — Apple-like</title>
 
-    <!-- TailwindCSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+        <title>Vent & Temp — Apple-like</title>
 
-    <style>
-      html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-      .safe-top { padding-top: max(env(safe-area-inset-top), 16px); }
-      .safe-bot { padding-bottom: max(env(safe-area-inset-bottom), 16px); }
+        <!-- TailwindCSS CDN -->
+        <script src="https://cdn.tailwindcss.com"></script>
 
-      .smooth { transition: transform 220ms ease, filter 220ms ease, opacity 220ms ease; }
-      .smooth-slow { transition: transform 420ms cubic-bezier(.2,.8,.2,1), opacity 220ms ease; }
+        <style>
+            html {
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
 
-      input[type=number]::-webkit-outer-spin-button,
-      input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-      input[type=number] { -moz-appearance: textfield; }
-    </style>
-  </head>
+            .safe-top {
+                padding-top: max(env(safe-area-inset-top), 16px);
+            }
 
-  <body class="min-h-screen bg-[#0B0B0F] text-white selection:bg-white/20">
-    <div class="mx-auto w-full max-w-[420px] px-4 safe-top safe-bot">
-      <!-- Top bar -->
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-[17px] font-semibold tracking-tight">Météo Vent</h1>
-          <p class="mt-0.5 text-[12px] text-white/55">GPS → température • vent • rafales</p>
-        </div>
+            .safe-bot {
+                padding-bottom: max(env(safe-area-inset-bottom), 16px);
+            }
 
-        <button
-          id="btnLocate"
-          class="rounded-full bg-white/10 px-4 py-2 text-[13px] font-semibold tracking-tight hover:bg-white/15 active:bg-white/20 active:scale-[0.99] transition"
-        >
-          Utiliser ma position
-        </button>
-      </div>
+            .smooth {
+                transition: transform 220ms ease, filter 220ms ease, opacity 220ms ease;
+            }
 
-      <!-- Status -->
-      <div class="mt-4">
-        <p id="status" class="text-[12px] text-white/55">Prêt.</p>
-        <div id="errorBox" class="mt-2 hidden rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-[13px] text-red-100"></div>
-      </div>
+            .smooth-slow {
+                transition: transform 420ms cubic-bezier(.2, .8, .2, 1), opacity 220ms ease;
+            }
 
-      <div class="mt-5 space-y-4">
-        <!-- Temperature card -->
-        <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
-          <div class="flex items-end justify-between gap-4">
-            <div>
-              <p class="text-[12px] text-white/55">Température</p>
-              <div class="mt-2 flex items-baseline gap-1">
-                <span id="temp" class="text-[56px] leading-none font-semibold tabular-nums">—</span>
-                <span class="text-[22px] text-white/70">°C</span>
-              </div>
-            </div>
+            input[type=number]::-webkit-outer-spin-button,
+            input[type=number]::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
 
-            <div class="text-right">
-              <p class="text-[12px] text-white/55">Mise à jour</p>
-              <p id="updatedAt" class="mt-1 text-[13px] text-white/80">—</p>
-              <p class="mt-1 text-[12px] text-white/55">
-                <span id="lat">—</span>, <span id="lon">—</span>
-              </p>
-            </div>
-          </div>
-        </div>
+            input[type=number] {
+                -moz-appearance: textfield;
+            }
+        </style>
+    </head>
 
-        <!-- Wind / Compass card -->
-        <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-[12px] text-white/55">Vent</p>
-
-              <div class="mt-2 flex items-baseline gap-2">
-                <span id="windSpeed" class="text-[34px] font-semibold tabular-nums">—</span>
-                <span class="text-[14px] text-white/65">km/h</span>
-              </div>
-
-              <p class="mt-1 text-[13px] text-white/70">
-                Direction <span id="windDirText" class="font-semibold text-white">—</span>
-                <span class="text-white/50">(<span id="windDirDeg">—</span>°)</span>
-              </p>
-
-              <p class="mt-2 text-[13px] text-white/70">
-                Rafales <span id="gustSpeed" class="font-semibold text-white tabular-nums">—</span>
-                <span class="text-white/55">km/h</span>
-              </p>
-            </div>
-
-            <!-- Compass widget -->
-            <div class="relative h-[180px] w-[180px]">
-              <!-- Outer ring -->
-              <div
-                id="compassRing"
-                class="absolute inset-0 rounded-full border border-white/12 bg-black/20 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.8)] smooth-slow"
-                style="transform: rotate(0deg);"
-              ></div>
-
-              <!-- Tick marks -->
-              <div class="absolute inset-0 rounded-full">
-                <div class="absolute left-1/2 top-0 h-3 w-px -translate-x-1/2 bg-white/25"></div>
-                <div class="absolute left-1/2 bottom-0 h-3 w-px -translate-x-1/2 bg-white/15"></div>
-                <div class="absolute top-1/2 left-0 h-px w-3 -translate-y-1/2 bg-white/15"></div>
-                <div class="absolute top-1/2 right-0 h-px w-3 -translate-y-1/2 bg-white/15"></div>
-
-                <div class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[30deg] origin-[50%_88px] bg-white/12"></div>
-                <div class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[60deg] origin-[50%_88px] bg-white/12"></div>
-                <div class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[120deg] origin-[50%_88px] bg-white/10"></div>
-                <div class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[150deg] origin-[50%_88px] bg-white/10"></div>
-                <div class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[210deg] origin-[50%_88px] bg-white/10"></div>
-                <div class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[240deg] origin-[50%_88px] bg-white/10"></div>
-                <div class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[300deg] origin-[50%_88px] bg-white/10"></div>
-                <div class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[330deg] origin-[50%_88px] bg-white/10"></div>
-              </div>
-
-              <!-- Labels -->
-              <div class="pointer-events-none absolute inset-0 grid place-items-center">
-                <div class="relative h-full w-full">
-                  <div class="absolute left-1/2 top-2 -translate-x-1/2 text-[11px] font-semibold text-white/85">N</div>
-                  <div class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-white/55">E</div>
-                  <div class="absolute left-1/2 bottom-2 -translate-x-1/2 text-[11px] font-semibold text-white/55">S</div>
-                  <div class="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-white/55">O</div>
+    <body class="min-h-screen bg-[#0B0B0F] text-white selection:bg-white/20">
+        <div class="mx-auto w-full max-w-[420px] px-4 safe-top safe-bot">
+            <!-- Top bar -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-[17px] font-semibold tracking-tight">Météo Vent</h1>
+                    <p class="mt-0.5 text-[12px] text-white/55">GPS → température • vent • rafales</p>
+                    <a href="boussole.html"
+                       class="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/15 active:scale-[0.99] transition">
+                        🧭 Ouvrir la boussole
+                    </a>
                 </div>
-              </div>
 
-              <!-- Wind marker -->
-              <div
-                id="windMarker"
-                class="absolute left-1/2 top-1/2 h-[78px] w-px -translate-x-1/2 -translate-y-1/2 origin-bottom smooth-slow"
-                style="transform: rotate(0deg);"
-              >
-                <div id="windDot" class="absolute -top-2 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-white/70 shadow-[0_0_0_6px_rgba(255,255,255,0.07)] smooth"></div>
-              </div>
+                <button
+                        id="btnLocate"
+                        class="rounded-full bg-white/10 px-4 py-2 text-[13px] font-semibold tracking-tight hover:bg-white/15 active:bg-white/20 active:scale-[0.99] transition">
+                    Utiliser ma position
+                </button>
+            </div>
 
-              <!-- NEW Needle: smaller + wider "arrow" (stable & apple-like) -->
-              <div
-                id="needle"
-                class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 origin-center smooth-slow"
-                style="transform: rotate(0deg);"
-                aria-label="Orientation"
-              >
-                <!-- Arrow SVG: wider + shorter -->
-                <svg width="74" height="74" viewBox="0 0 100 100" class="drop-shadow-[0_10px_25px_rgba(0,0,0,0.55)]">
-                  <!-- subtle base -->
-                  <circle cx="50" cy="50" r="18" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.08)" />
-                  <!-- arrow body -->
-                  <path
-                    id="needleShape"
-                    d="M50 14
+            <!-- Status -->
+            <div class="mt-4">
+                <p id="status" class="text-[12px] text-white/55">Prêt.</p>
+                <div id="errorBox"
+                     class="mt-2 hidden rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-[13px] text-red-100">
+                </div>
+            </div>
+
+            <div class="mt-5 space-y-4">
+                <!-- Temperature card -->
+                <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                    <div class="flex items-end justify-between gap-4">
+                        <div>
+                            <p class="text-[12px] text-white/55">Température</p>
+                            <div class="mt-2 flex items-baseline gap-1">
+                                <span id="temp" class="text-[56px] leading-none font-semibold tabular-nums">—</span>
+                                <span class="text-[22px] text-white/70">°C</span>
+                            </div>
+                        </div>
+
+                        <div class="text-right">
+                            <p class="text-[12px] text-white/55">Mise à jour</p>
+                            <p id="updatedAt" class="mt-1 text-[13px] text-white/80">—</p>
+                            <p class="mt-1 text-[12px] text-white/55">
+                                <span id="lat">—</span>, <span id="lon">—</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wind / Compass card -->
+                <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[12px] text-white/55">Vent</p>
+
+                            <div class="mt-2 flex items-baseline gap-2">
+                                <span id="windSpeed" class="text-[34px] font-semibold tabular-nums">—</span>
+                                <span class="text-[14px] text-white/65">km/h</span>
+                            </div>
+
+                            <p class="mt-1 text-[13px] text-white/70">
+                                Direction <span id="windDirText" class="font-semibold text-white">—</span>
+                                <span class="text-white/50">(<span id="windDirDeg">—</span>°)</span>
+                            </p>
+
+                            <p class="mt-2 text-[13px] text-white/70">
+                                Rafales <span id="gustSpeed" class="font-semibold text-white tabular-nums">—</span>
+                                <span class="text-white/55">km/h</span>
+                            </p>
+                        </div>
+
+                        <!-- Compass widget -->
+                        <div class="relative h-[180px] w-[180px]">
+                            <!-- Outer ring -->
+                            <div
+                                 id="compassRing"
+                                 class="absolute inset-0 rounded-full border border-white/12 bg-black/20 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.8)] smooth-slow"
+                                 style="transform: rotate(0deg);"></div>
+
+                            <!-- Tick marks -->
+                            <div class="absolute inset-0 rounded-full">
+                                <div class="absolute left-1/2 top-0 h-3 w-px -translate-x-1/2 bg-white/25"></div>
+                                <div class="absolute left-1/2 bottom-0 h-3 w-px -translate-x-1/2 bg-white/15"></div>
+                                <div class="absolute top-1/2 left-0 h-px w-3 -translate-y-1/2 bg-white/15"></div>
+                                <div class="absolute top-1/2 right-0 h-px w-3 -translate-y-1/2 bg-white/15"></div>
+
+                                <div
+                                     class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[30deg] origin-[50%_88px] bg-white/12">
+                                </div>
+                                <div
+                                     class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[60deg] origin-[50%_88px] bg-white/12">
+                                </div>
+                                <div
+                                     class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[120deg] origin-[50%_88px] bg-white/10">
+                                </div>
+                                <div
+                                     class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[150deg] origin-[50%_88px] bg-white/10">
+                                </div>
+                                <div
+                                     class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[210deg] origin-[50%_88px] bg-white/10">
+                                </div>
+                                <div
+                                     class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[240deg] origin-[50%_88px] bg-white/10">
+                                </div>
+                                <div
+                                     class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[300deg] origin-[50%_88px] bg-white/10">
+                                </div>
+                                <div
+                                     class="absolute left-1/2 top-1.5 h-2 w-px -translate-x-1/2 rotate-[330deg] origin-[50%_88px] bg-white/10">
+                                </div>
+                            </div>
+
+                            <!-- Labels -->
+                            <div class="pointer-events-none absolute inset-0 grid place-items-center">
+                                <div class="relative h-full w-full">
+                                    <div
+                                         class="absolute left-1/2 top-2 -translate-x-1/2 text-[11px] font-semibold text-white/85">
+                                        N</div>
+                                    <div
+                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-white/55">
+                                        E</div>
+                                    <div
+                                         class="absolute left-1/2 bottom-2 -translate-x-1/2 text-[11px] font-semibold text-white/55">
+                                        S</div>
+                                    <div
+                                         class="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-white/55">
+                                        O</div>
+                                </div>
+                            </div>
+
+                            <!-- Wind marker -->
+                            <div
+                                 id="windMarker"
+                                 class="absolute left-1/2 top-1/2 h-[78px] w-px -translate-x-1/2 -translate-y-1/2 origin-bottom smooth-slow"
+                                 style="transform: rotate(0deg);">
+                                <div id="windDot"
+                                     class="absolute -top-2 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-white/70 shadow-[0_0_0_6px_rgba(255,255,255,0.07)] smooth">
+                                </div>
+                            </div>
+
+                            <!-- NEW Needle: smaller + wider "arrow" (stable & apple-like) -->
+                            <div
+                                 id="needle"
+                                 class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 origin-center smooth-slow"
+                                 style="transform: rotate(0deg);"
+                                 aria-label="Orientation">
+                                <!-- Arrow SVG: wider + shorter -->
+                                <svg width="74" height="74" viewBox="0 0 100 100"
+                                     class="drop-shadow-[0_10px_25px_rgba(0,0,0,0.55)]">
+                                    <!-- subtle base -->
+                                    <circle cx="50" cy="50" r="18" fill="rgba(0,0,0,0.25)"
+                                            stroke="rgba(255,255,255,0.08)" />
+                                    <!-- arrow body -->
+                                    <path
+                                          id="needleShape"
+                                          d="M50 14
                        C56 24 62 33 66 44
                        C62 43 57 42 50 42
                        C43 42 38 43 34 44
                        C38 33 44 24 50 14 Z"
-                    fill="rgba(255,255,255,0.88)"
-                  />
-                  <!-- little notch -->
-                  <path
-                    d="M50 42
+                                          fill="rgba(255,255,255,0.88)" />
+                                    <!-- little notch -->
+                                    <path
+                                          d="M50 42
                        C57 42 62 43 66 44
                        C64 48 61 52 58 56
                        C56 54 54 52 50 52
                        C46 52 44 54 42 56
                        C39 52 36 48 34 44
                        C38 43 43 42 50 42 Z"
-                    fill="rgba(255,255,255,0.18)"
-                  />
-                  <!-- center dot -->
-                  <circle id="needleTip" cx="50" cy="50" r="4.2" fill="rgba(255,255,255,0.82)" />
-                </svg>
-              </div>
+                                          fill="rgba(255,255,255,0.18)" />
+                                    <!-- center dot -->
+                                    <circle id="needleTip" cx="50" cy="50" r="4.2" fill="rgba(255,255,255,0.82)" />
+                                </svg>
+                            </div>
 
-              <!-- Center -->
-              <div class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/40 shadow-inner"></div>
+                            <!-- Center -->
+                            <div
+                                 class="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/40 shadow-inner">
+                            </div>
 
-              <!-- Hint -->
-              <div class="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] text-white/55">
-                <span id="headingText">Orientation —</span>
-              </div>
+                            <!-- Hint -->
+                            <div
+                                 class="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] text-white/55">
+                                <span id="headingText">Orientation —</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 flex gap-2">
+                        <button
+                                id="btnRefresh"
+                                class="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] font-semibold hover:bg-white/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled>
+                            Rafraîchir météo
+                        </button>
+
+                        <button
+                                id="btnDemo"
+                                class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] font-semibold hover:bg-white/10 transition">
+                            Démo (Colmar)
+                        </button>
+                    </div>
+
+                    <p class="mt-3 text-[11px] leading-relaxed text-white/45">
+                        La boussole utilise l’orientation du téléphone (si autorisée). Elle devient colorée quand ton
+                        orientation
+                        est alignée avec la direction du vent (±<span id="toleranceText">10</span>°).
+                    </p>
+                </div>
+
+                <div class="text-center text-[11px] text-white/40">
+                    Données météo: Open-Meteo • direction en degrés (0°=Nord)
+                </div>
             </div>
-          </div>
-
-          <div class="mt-5 flex gap-2">
-            <button
-              id="btnRefresh"
-              class="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] font-semibold hover:bg-white/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled
-            >
-              Rafraîchir météo
-            </button>
-
-            <button
-              id="btnDemo"
-              class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] font-semibold hover:bg-white/10 transition"
-            >
-              Démo (Colmar)
-            </button>
-          </div>
-
-          <p class="mt-3 text-[11px] leading-relaxed text-white/45">
-            La boussole utilise l’orientation du téléphone (si autorisée). Elle devient colorée quand ton orientation
-            est alignée avec la direction du vent (±<span id="toleranceText">10</span>°).
-          </p>
         </div>
 
-        <div class="text-center text-[11px] text-white/40">
-          Données météo: Open-Meteo • direction en degrés (0°=Nord)
-        </div>
-      </div>
-    </div>
+        <script>
+            const $ = (id) => document.getElementById(id);
 
-    <script>
-      const $ = (id) => document.getElementById(id);
-
-      function setStatus(msg) { $("status").textContent = msg; }
-      function setError(msg) {
-        const box = $("errorBox");
-        if (!msg) { box.classList.add("hidden"); box.textContent = ""; return; }
-        box.classList.remove("hidden");
-        box.textContent = msg;
-      }
-
-      function formatNumber(x, digits = 0) {
-        if (x === null || x === undefined || Number.isNaN(x)) return "—";
-        return Number(x).toFixed(digits);
-      }
-
-      function degToCompass(deg) {
-        if (deg === null || deg === undefined || Number.isNaN(deg)) return "—";
-        const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"];
-        const idx = Math.round(((deg % 360) / 22.5)) % 16;
-        return dirs[idx];
-      }
-
-      function nowFR() { return new Date().toLocaleString("fr-FR", { hour12: false }); }
-
-      function wrap360(d) { return ((d % 360) + 360) % 360; }
-
-      function shortestAngleDiff(a, b) {
-        const da = wrap360(a);
-        const db = wrap360(b);
-        let diff = db - da;
-        if (diff > 180) diff -= 360;
-        if (diff < -180) diff += 360;
-        return diff;
-      }
-
-      // Weather
-      async function fetchWeather(lat, lon) {
-        const url =
-          "https://api.open-meteo.com/v1/forecast" +
-          `?latitude=${encodeURIComponent(lat)}` +
-          `&longitude=${encodeURIComponent(lon)}` +
-          "&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m" +
-          "&wind_speed_unit=kmh" +
-          "&timezone=auto";
-
-        const res = await fetch(url, { headers: { Accept: "application/json" } });
-        if (!res.ok) throw new Error("Erreur API météo (HTTP " + res.status + ").");
-        return res.json();
-      }
-
-      let lastCoords = null;
-      let windDirDeg = null;
-      let headingDeg = null;
-
-      const TOLERANCE_DEG = 10;
-      $("toleranceText").textContent = TOLERANCE_DEG;
-
-      function setCompassHighlight(isOn) {
-        const ring = $("compassRing");
-        const dot = $("windDot");
-        const needleShape = $("needleShape");
-        const needleTip = $("needleTip");
-
-        if (isOn) {
-          ring.style.borderColor = "rgba(52, 211, 153, 0.35)";
-          ring.style.boxShadow = "0 30px 80px -40px rgba(16, 185, 129, 0.35)";
-          dot.style.backgroundColor = "rgba(52, 211, 153, 0.95)";
-          dot.style.boxShadow = "0 0 0 8px rgba(16, 185, 129, 0.12)";
-          needleShape.setAttribute("fill", "rgba(52, 211, 153, 0.92)");
-          needleTip.setAttribute("fill", "rgba(52, 211, 153, 0.92)");
-        } else {
-          ring.style.borderColor = "rgba(255,255,255,0.12)";
-          ring.style.boxShadow = "0 30px 80px -40px rgba(0,0,0,0.8)";
-          dot.style.backgroundColor = "rgba(255,255,255,0.70)";
-          dot.style.boxShadow = "0 0 0 6px rgba(255,255,255,0.07)";
-          needleShape.setAttribute("fill", "rgba(255,255,255,0.88)");
-          needleTip.setAttribute("fill", "rgba(255,255,255,0.82)");
-        }
-      }
-
-      function updateCompass() {
-        const ring = $("compassRing");
-        const windMarker = $("windMarker");
-        const headingText = $("headingText");
-        const needle = $("needle");
-
-        const h = headingDeg;
-        if (h == null || Number.isNaN(h)) {
-          headingText.textContent = "Orientation —";
-          // keep wind marker absolute if no heading
-          if (windDirDeg != null && !Number.isNaN(windDirDeg)) {
-            windMarker.style.transform = `rotate(${wrap360(windDirDeg)}deg)`;
-          }
-          // keep needle pointing north
-          needle.style.transform = `rotate(0deg)`;
-          setCompassHighlight(false);
-          return;
-        }
-
-        const hw = wrap360(h);
-        headingText.textContent = "Orientation " + degToCompass(hw) + " (" + Math.round(hw) + "°)";
-
-        ring.style.transform = `rotate(${-hw}deg)`;
-
-        // needle shows phone heading (points where you face)
-        needle.style.transform = `rotate(${0}deg)`; // kept "up" for a clean look
-
-        // wind marker relative
-        if (windDirDeg != null && !Number.isNaN(windDirDeg)) {
-          const rel = wrap360(windDirDeg - hw);
-          windMarker.style.transform = `rotate(${rel}deg)`;
-        }
-
-        if (windDirDeg != null && !Number.isNaN(windDirDeg)) {
-          const diff = Math.abs(shortestAngleDiff(hw, windDirDeg));
-          setCompassHighlight(diff <= TOLERANCE_DEG);
-        } else {
-          setCompassHighlight(false);
-        }
-      }
-
-      function renderWeather(data, lat, lon) {
-        const cur = data?.current ?? null;
-
-        const temp = cur?.temperature_2m ?? null;
-        const ws = cur?.wind_speed_10m ?? null;
-        const wd = cur?.wind_direction_10m ?? null;
-        const gust = cur?.wind_gusts_10m ?? null;
-
-        $("temp").textContent = formatNumber(temp, 1);
-        $("windSpeed").textContent = formatNumber(ws, 0);
-        $("windDirDeg").textContent = wd ?? "—";
-        $("windDirText").textContent = degToCompass(wd);
-        $("gustSpeed").textContent = gust == null ? "—" : formatNumber(gust, 0);
-
-        windDirDeg = (wd == null ? null : Number(wd));
-
-        $("lat").textContent = Number(lat).toFixed(5);
-        $("lon").textContent = Number(lon).toFixed(5);
-        $("updatedAt").textContent = nowFR();
-        $("btnRefresh").disabled = false;
-
-        updateCompass();
-      }
-
-      async function runWithCoords(lat, lon) {
-        setError(null);
-        setStatus("Récupération météo…");
-        $("btnRefresh").disabled = true;
-
-        try {
-          const data = await fetchWeather(lat, lon);
-          renderWeather(data, lat, lon);
-          lastCoords = { lat, lon };
-          setStatus("OK");
-        } catch (err) {
-          console.error(err);
-          setStatus("Erreur.");
-          setError(err?.message || "Une erreur est survenue.");
-        }
-      }
-
-      function requestLocation() {
-        setError(null);
-
-        if (!("geolocation" in navigator)) {
-          setStatus("Géolocalisation indisponible.");
-          setError("Ton navigateur ne supporte pas la géolocalisation.");
-          return;
-        }
-
-        setStatus("Demande d’accès à la position…");
-
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            const { latitude, longitude } = pos.coords;
-            setStatus("Position obtenue. Chargement météo…");
-            await runWithCoords(latitude, longitude);
-          },
-          (err) => {
-            console.error(err);
-            setStatus("Position refusée.");
-            let msg = "Impossible de récupérer la position.";
-            if (err.code === 1) msg = "Accès à la localisation refusé. Autorise la localisation dans ton navigateur.";
-            if (err.code === 2) msg = "Position indisponible (GPS / réseau).";
-            if (err.code === 3) msg = "Délai dépassé pour récupérer la position.";
-            setError(msg);
-          },
-          { enableHighAccuracy: true, timeout: 12000, maximumAge: 20000 }
-        );
-      }
-
-      // Compass
-      function setHeadingFromEvent(evt) {
-        let heading = null;
-
-        if (typeof evt.webkitCompassHeading === "number") {
-          heading = evt.webkitCompassHeading;
-        } else if (typeof evt.alpha === "number") {
-          heading = 360 - evt.alpha;
-        }
-
-        if (heading == null || Number.isNaN(heading)) return;
-
-        headingDeg = wrap360(heading);
-        updateCompass();
-      }
-
-      async function enableCompassIfPossible() {
-        try {
-          if (typeof DeviceOrientationEvent !== "undefined" &&
-              typeof DeviceOrientationEvent.requestPermission === "function") {
-            const res = await DeviceOrientationEvent.requestPermission();
-            if (res !== "granted") {
-              setStatus("Boussole non autorisée.");
-              return;
+            function setStatus(msg) { $("status").textContent = msg; }
+            function setError(msg) {
+                const box = $("errorBox");
+                if (!msg) { box.classList.add("hidden"); box.textContent = ""; return; }
+                box.classList.remove("hidden");
+                box.textContent = msg;
             }
-          }
 
-          window.addEventListener("deviceorientation", setHeadingFromEvent, true);
-          setStatus("Boussole active.");
-        } catch (err) {
-          console.warn(err);
-        }
-      }
+            function formatNumber(x, digits = 0) {
+                if (x === null || x === undefined || Number.isNaN(x)) return "—";
+                return Number(x).toFixed(digits);
+            }
 
-      // UI events
-      $("btnLocate").addEventListener("click", async () => {
-        await enableCompassIfPossible();
-        requestLocation();
-      });
+            function degToCompass(deg) {
+                if (deg === null || deg === undefined || Number.isNaN(deg)) return "—";
+                const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO"];
+                const idx = Math.round(((deg % 360) / 22.5)) % 16;
+                return dirs[idx];
+            }
 
-      $("btnRefresh").addEventListener("click", async () => {
-        if (!lastCoords) return;
-        await runWithCoords(lastCoords.lat, lastCoords.lon);
-      });
+            function nowFR() { return new Date().toLocaleString("fr-FR", { hour12: false }); }
 
-      $("btnDemo").addEventListener("click", async () => {
-        await enableCompassIfPossible();
-        await runWithCoords(48.0794, 7.3585);
-      });
+            function wrap360(d) { return ((d % 360) + 360) % 360; }
 
-      setStatus("Clique sur “Utiliser ma position” (et autorise la boussole si demandé).");
-    </script>
-  </body>
+            function shortestAngleDiff(a, b) {
+                const da = wrap360(a);
+                const db = wrap360(b);
+                let diff = db - da;
+                if (diff > 180) diff -= 360;
+                if (diff < -180) diff += 360;
+                return diff;
+            }
+
+            // Weather
+            async function fetchWeather(lat, lon) {
+                const url =
+                    "https://api.open-meteo.com/v1/forecast" +
+                    `?latitude=${encodeURIComponent(lat)}` +
+                    `&longitude=${encodeURIComponent(lon)}` +
+                    "&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m" +
+                    "&wind_speed_unit=kmh" +
+                    "&timezone=auto";
+
+                const res = await fetch(url, { headers: { Accept: "application/json" } });
+                if (!res.ok) throw new Error("Erreur API météo (HTTP " + res.status + ").");
+                return res.json();
+            }
+
+            let lastCoords = null;
+            let windDirDeg = null;
+            let headingDeg = null;
+
+            const TOLERANCE_DEG = 10;
+            $("toleranceText").textContent = TOLERANCE_DEG;
+
+            function setCompassHighlight(isOn) {
+                const ring = $("compassRing");
+                const dot = $("windDot");
+                const needleShape = $("needleShape");
+                const needleTip = $("needleTip");
+
+                if (isOn) {
+                    ring.style.borderColor = "rgba(52, 211, 153, 0.35)";
+                    ring.style.boxShadow = "0 30px 80px -40px rgba(16, 185, 129, 0.35)";
+                    dot.style.backgroundColor = "rgba(52, 211, 153, 0.95)";
+                    dot.style.boxShadow = "0 0 0 8px rgba(16, 185, 129, 0.12)";
+                    needleShape.setAttribute("fill", "rgba(52, 211, 153, 0.92)");
+                    needleTip.setAttribute("fill", "rgba(52, 211, 153, 0.92)");
+                } else {
+                    ring.style.borderColor = "rgba(255,255,255,0.12)";
+                    ring.style.boxShadow = "0 30px 80px -40px rgba(0,0,0,0.8)";
+                    dot.style.backgroundColor = "rgba(255,255,255,0.70)";
+                    dot.style.boxShadow = "0 0 0 6px rgba(255,255,255,0.07)";
+                    needleShape.setAttribute("fill", "rgba(255,255,255,0.88)");
+                    needleTip.setAttribute("fill", "rgba(255,255,255,0.82)");
+                }
+            }
+
+            function updateCompass() {
+                const ring = $("compassRing");
+                const windMarker = $("windMarker");
+                const headingText = $("headingText");
+                const needle = $("needle");
+
+                const h = headingDeg;
+                if (h == null || Number.isNaN(h)) {
+                    headingText.textContent = "Orientation —";
+                    // keep wind marker absolute if no heading
+                    if (windDirDeg != null && !Number.isNaN(windDirDeg)) {
+                        windMarker.style.transform = `rotate(${wrap360(windDirDeg)}deg)`;
+                    }
+                    // keep needle pointing north
+                    needle.style.transform = `rotate(0deg)`;
+                    setCompassHighlight(false);
+                    return;
+                }
+
+                const hw = wrap360(h);
+                headingText.textContent = "Orientation " + degToCompass(hw) + " (" + Math.round(hw) + "°)";
+
+                ring.style.transform = `rotate(${-hw}deg)`;
+
+                // needle shows phone heading (points where you face)
+                needle.style.transform = `rotate(${0}deg)`; // kept "up" for a clean look
+
+                // wind marker relative
+                if (windDirDeg != null && !Number.isNaN(windDirDeg)) {
+                    const rel = wrap360(windDirDeg - hw);
+                    windMarker.style.transform = `rotate(${rel}deg)`;
+                }
+
+                if (windDirDeg != null && !Number.isNaN(windDirDeg)) {
+                    const diff = Math.abs(shortestAngleDiff(hw, windDirDeg));
+                    setCompassHighlight(diff <= TOLERANCE_DEG);
+                } else {
+                    setCompassHighlight(false);
+                }
+            }
+
+            function renderWeather(data, lat, lon) {
+                const cur = data?.current ?? null;
+
+                const temp = cur?.temperature_2m ?? null;
+                const ws = cur?.wind_speed_10m ?? null;
+                const wd = cur?.wind_direction_10m ?? null;
+                const gust = cur?.wind_gusts_10m ?? null;
+
+                $("temp").textContent = formatNumber(temp, 1);
+                $("windSpeed").textContent = formatNumber(ws, 0);
+                $("windDirDeg").textContent = wd ?? "—";
+                $("windDirText").textContent = degToCompass(wd);
+                $("gustSpeed").textContent = gust == null ? "—" : formatNumber(gust, 0);
+
+                windDirDeg = (wd == null ? null : Number(wd));
+
+                $("lat").textContent = Number(lat).toFixed(5);
+                $("lon").textContent = Number(lon).toFixed(5);
+                $("updatedAt").textContent = nowFR();
+                $("btnRefresh").disabled = false;
+
+                updateCompass();
+            }
+
+            async function runWithCoords(lat, lon) {
+                setError(null);
+                setStatus("Récupération météo…");
+                $("btnRefresh").disabled = true;
+
+                try {
+                    const data = await fetchWeather(lat, lon);
+                    renderWeather(data, lat, lon);
+                    lastCoords = { lat, lon };
+                    setStatus("OK");
+                } catch (err) {
+                    console.error(err);
+                    setStatus("Erreur.");
+                    setError(err?.message || "Une erreur est survenue.");
+                }
+            }
+
+            function requestLocation() {
+                setError(null);
+
+                if (!("geolocation" in navigator)) {
+                    setStatus("Géolocalisation indisponible.");
+                    setError("Ton navigateur ne supporte pas la géolocalisation.");
+                    return;
+                }
+
+                setStatus("Demande d’accès à la position…");
+
+                navigator.geolocation.getCurrentPosition(
+                    async (pos) => {
+                        const { latitude, longitude } = pos.coords;
+                        setStatus("Position obtenue. Chargement météo…");
+                        await runWithCoords(latitude, longitude);
+                    },
+                    (err) => {
+                        console.error(err);
+                        setStatus("Position refusée.");
+                        let msg = "Impossible de récupérer la position.";
+                        if (err.code === 1) msg = "Accès à la localisation refusé. Autorise la localisation dans ton navigateur.";
+                        if (err.code === 2) msg = "Position indisponible (GPS / réseau).";
+                        if (err.code === 3) msg = "Délai dépassé pour récupérer la position.";
+                        setError(msg);
+                    },
+                    { enableHighAccuracy: true, timeout: 12000, maximumAge: 20000 }
+                );
+            }
+
+            // Compass
+            function setHeadingFromEvent(evt) {
+                let heading = null;
+
+                if (typeof evt.webkitCompassHeading === "number") {
+                    heading = evt.webkitCompassHeading;
+                } else if (typeof evt.alpha === "number") {
+                    heading = 360 - evt.alpha;
+                }
+
+                if (heading == null || Number.isNaN(heading)) return;
+
+                headingDeg = wrap360(heading);
+                updateCompass();
+            }
+
+            async function enableCompassIfPossible() {
+                try {
+                    if (typeof DeviceOrientationEvent !== "undefined" &&
+                        typeof DeviceOrientationEvent.requestPermission === "function") {
+                        const res = await DeviceOrientationEvent.requestPermission();
+                        if (res !== "granted") {
+                            setStatus("Boussole non autorisée.");
+                            return;
+                        }
+                    }
+
+                    window.addEventListener("deviceorientation", setHeadingFromEvent, true);
+                    setStatus("Boussole active.");
+                } catch (err) {
+                    console.warn(err);
+                }
+            }
+
+            // UI events
+            $("btnLocate").addEventListener("click", async () => {
+                await enableCompassIfPossible();
+                requestLocation();
+            });
+
+            $("btnRefresh").addEventListener("click", async () => {
+                if (!lastCoords) return;
+                await runWithCoords(lastCoords.lat, lastCoords.lon);
+            });
+
+            $("btnDemo").addEventListener("click", async () => {
+                await enableCompassIfPossible();
+                await runWithCoords(48.0794, 7.3585);
+            });
+
+            setStatus("Clique sur “Utiliser ma position” (et autorise la boussole si demandé).");
+        </script>
+    </body>
+
 </html>
