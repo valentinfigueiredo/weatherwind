@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>WeatherWind</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #080810;
+      --surface: #0d0d18;
+      --surface2: #111120;
+      --border: rgba(255,255,255,0.06);
+      --border-hi: rgba(255,255,255,0.12);
+      --txt: #e8e8f0;
+      --muted: rgba(232,232,240,0.38);
+      --accent: #5b8cff;
+      --green: #30d158;
+      --red: #ff453a;
+      --font-d: 'Syne', sans-serif;
+      --font-m: 'DM Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-font-smoothing: antialiased; background: var(--bg); }
+    body { font-family: var(--font-d); background: var(--bg); color: var(--txt); min-height: 100svh; overflow-x: hidden; }
+
+    /* subtle grain */
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+      background-size: 200px;
+    }
+
+    .app { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; padding: max(env(safe-area-inset-top),22px) 18px max(env(safe-area-inset-bottom),22px); }
+
+    /* ── HEADER ── */
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+    .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: rgba(255,255,255,0.88); }
+    .header p { margin-top: 2px; font-family: var(--font-m); font-size: 10px; color: var(--muted); }
+
+    .btn-locate {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      color: rgba(255,255,255,0.65); border-radius: 100px; padding: 7px 14px;
+      font-family: var(--font-d); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 180ms ease; white-space: nowrap;
+    }
+    .btn-locate:hover { background: rgba(255,255,255,0.08); border-color: var(--border-hi); color: var(--txt); }
+    .btn-locate:active { transform: scale(0.97); }
+    .btn-locate .loc-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.25); transition: all 300ms; flex-shrink: 0; }
+    .btn-locate.active .loc-dot { background: var(--green); box-shadow: 0 0 0 3px rgba(48,209,88,0.2); }
+    .btn-locate.active { border-color: rgba(48,209,88,0.28); color: rgba(255,255,255,0.85); }
+
+    /* ── STATUS ── */
+    .status-bar { display: flex; align-items: center; gap: 7px; min-height: 20px; margin-bottom: 6px; }
+    .status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 300ms; }
+    .status-dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(48,209,88,0.5); }
+    .status-dot.loading { background: var(--accent); animation: pulse 1s infinite; }
+    .status-dot.error { background: #f87171; }
+    @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:0.35 } }
+    .status-text { font-family: var(--font-m); font-size: 10px; color: var(--muted); flex: 1; }
+    .auto-badge { font-family: var(--font-m); font-size: 10px; color: var(--accent); background: rgba(91,140,255,0.08); border: 1px solid rgba(91,140,255,0.18); padding: 1px 7px; border-radius: 100px; display: none; }
+    .auto-badge.active { display: block; }
+    .city-name { font-family: var(--font-d); font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.65); margin-bottom: 14px; display: none; }
+    .error-box { display: none; background: rgba(248,113,113,0.06); border: 1px solid rgba(248,113,113,0.16); border-radius: 12px; padding: 10px 14px; font-family: var(--font-m); font-size: 11px; color: #fca5a5; margin-bottom: 12px; line-height: 1.5; }
+
+    /* ── CARDS ── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 20px; position: relative; overflow: hidden; margin-bottom: 10px; }
+    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent); }
+
+    /* ── TEMP CARD — compact ── */
+    .temp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .temp-lhs { display: flex; align-items: baseline; gap: 4px; }
+    .temp-label-sm { font-family: var(--font-m); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+    .temp-value {
+      /* Smaller & lighter */
+      font-size: 46px; font-weight: 300; line-height: 1; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.80);
+    }
+    .temp-unit { font-size: 18px; font-weight: 300; color: var(--muted); }
+    .temp-meta { text-align: right; }
+    .meta-lbl { font-family: var(--font-m); font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .meta-val { font-family: var(--font-m); font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 3px; }
+    .meta-coords { font-family: var(--font-m); font-size: 9px; color: var(--muted); margin-top: 3px; }
+
+    /* Unit toggle */
+    .unit-toggle { display: flex; gap: 3px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .unit-btn { flex: 1; background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 5px 3px; font-family: var(--font-m); font-size: 10px; font-weight: 500; cursor: pointer; transition: all 140ms; }
+    .unit-btn.active { background: rgba(91,140,255,0.12); border-color: rgba(91,140,255,0.35); color: #93b4ff; }
+    .unit-btn:hover:not(.active) { border-color: var(--border-hi); color: var(--txt); }
+
+    /* ── WIND CARD ── */
+    /* Wind stats on top, full-width */
+    .wind-stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 18px; }
+    .wind-stat { }
+    .wind-stat:first-child { border-right: 1px solid var(--border); padding-right: 16px; }
+    .wind-stat:last-child { padding-left: 16px; }
+    .wstat-lbl { font-family: var(--font-m); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
+    .wstat-main { display: flex; align-items: baseline; gap: 5px; }
+    /* BIG wind values */
+    .wind-value { font-size: 56px; font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; color: var(--txt); line-height: 1; transition: all 350ms; }
+    .gust-value { font-size: 56px; font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; color: var(--txt); line-height: 1; transition: all 350ms; }
+    .wstat-unit { font-family: var(--font-m); font-size: 13px; color: var(--muted); }
+    .wstat-dir { font-family: var(--font-m); font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+    .wstat-dir strong { color: rgba(255,255,255,0.75); }
+
+    /* ── COMPASS — full width below wind stats ── */
+    .compass-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+    .compass-instrument {
+      position: relative;
+      width: 240px; height: 240px;
+    }
+
+    /* Outer bezel ring */
+    .c-bezel {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.10);
+      background: rgba(8,8,16,0.95);
+      box-shadow: inset 0 0 40px rgba(0,0,0,0.7), 0 16px 48px rgba(0,0,0,0.5);
+      transition: border-color 400ms, box-shadow 400ms;
+    }
+
+    /* Dial canvas (rotates with heading) */
+    .c-dial-ring {
+      position: absolute; inset: 0; border-radius: 50%;
+      transition: transform 500ms cubic-bezier(0.2,0.8,0.2,1);
+    }
+    #dialCanvas { border-radius: 50%; }
+
+    /* Fixed north pointer at very top */
+    .c-north-ptr {
+      position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-bottom: 7px solid rgba(255,255,255,0.5);
+      z-index: 20;
+    }
+
+    /* Wind direction ARROW (rotates to wind direction, relative to heading) */
+    .c-wind-arrow {
+      position: absolute; left: 50%; top: 50%;
+      transform-origin: 50% 100%;
+      transition: transform 500ms cubic-bezier(0.2,0.8,0.2,1);
+      z-index: 8;
+    }
+
+    /* Compass heading needle (your direction, always points up) */
+    .c-needle {
+      position: absolute; left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 9;
+      pointer-events: none;
+    }
+    .c-needle svg .nb, .c-needle svg .nd {
+      transition: fill 450ms ease, filter 450ms ease;
+    }
+
+    /* Glass shimmer */
+    .c-glass {
+      position: absolute; inset: 14px; border-radius: 50%;
+      background: radial-gradient(ellipse at 38% 30%, rgba(255,255,255,0.025) 0%, transparent 55%);
+      pointer-events: none; z-index: 15;
+    }
+
+    /* Center hub */
+    .c-hub {
+      position: absolute; left: 50%; top: 50%;
+      width: 16px; height: 16px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 1px solid rgba(255,255,255,0.18);
+      z-index: 18;
+    }
+
+    /* Readout row */
+    .compass-readout {
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      width: 100%;
+    }
+    .rdout-block { text-align: center; }
+    .rdout-val { font-family: var(--font-m); font-size: 18px; font-weight: 500; letter-spacing: 0.04em; color: rgba(255,255,255,0.80); font-variant-numeric: tabular-nums; line-height: 1; }
+    .rdout-lbl { font-family: var(--font-m); font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px; }
+    .rdout-sep { width: 1px; height: 28px; background: var(--border); }
+    .state-pill {
+      font-family: var(--font-m); font-size: 10px; font-weight: 500;
+      padding: 3px 10px; border-radius: 100px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      transition: all 400ms;
+    }
+    .state-pill.aligned { background: rgba(48,209,88,0.10); border-color: rgba(48,209,88,0.30); color: var(--green); }
+    .state-pill.against { background: rgba(255,69,58,0.10); border-color: rgba(255,69,58,0.30); color: var(--red); }
+
+    /* ── BUTTONS ── */
+    .btn-row { display: flex; gap: 7px; margin-top: 16px; }
+    .btn { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: rgba(255,255,255,0.6); border-radius: 12px; padding: 11px 12px; font-family: var(--font-d); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 140ms; }
+    .btn:hover:not(:disabled) { background: rgba(255,255,255,0.06); border-color: var(--border-hi); color: var(--txt); }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-auto { background: rgba(91,140,255,0.08); border-color: rgba(91,140,255,0.20); color: rgba(147,180,255,0.8); flex: 0 0 auto; padding-left: 14px; padding-right: 14px; }
+    .btn-auto.on { background: rgba(91,140,255,0.16); border-color: rgba(91,140,255,0.40); color: #93b4ff; }
+    .btn-demo { flex: 0 0 auto; padding-left: 14px; padding-right: 14px; }
+
+    /* ── HISTORY ── */
+    .history-card { display: none; }
+    .history-card.visible { display: block; }
+    .history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .history-title { font-family: var(--font-m); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .history-clear { font-family: var(--font-m); font-size: 10px; color: var(--muted); background: none; border: none; cursor: pointer; transition: color 140ms; }
+    .history-clear:hover { color: #f87171; }
+    .history-list { display: flex; flex-direction: column; gap: 5px; }
+    .history-item { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; padding: 7px 11px; background: var(--surface2); border-radius: 9px; border: 1px solid var(--border); animation: fadeIn 180ms ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(-3px) } to { opacity:1; transform:none } }
+    .hist-time { font-family: var(--font-m); font-size: 9px; color: var(--muted); }
+    .hist-temp, .hist-wind { font-family: var(--font-m); font-size: 10px; color: var(--txt); font-weight: 500; }
+    .hist-dir { font-family: var(--font-m); font-size: 9px; color: var(--muted); }
+
+    .footer { text-align: center; font-family: var(--font-m); font-size: 9px; color: rgba(255,255,255,0.16); margin-top: 6px; }
+
+    @keyframes dataIn { from { opacity:0; transform:translateY(3px) } to { opacity:1; transform:none } }
+    .data-enter { animation: dataIn 300ms ease forwards; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>WeatherWind</h1>
+      <p>GPS · Open-Meteo · Boussole</p>
+    </div>
+    <button class="btn-locate" id="btnLocate">
+      <span class="loc-dot"></span>Ma position
+    </button>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-text" id="statusText">Prêt — clique sur « Ma position »</span>
+    <span class="auto-badge" id="autoRefreshBadge">⟳ auto</span>
+  </div>
+  <div class="city-name" id="cityName"></div>
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Temperature card (compact) -->
+  <div class="card">
+    <div class="temp-label-sm">Température</div>
+    <div class="temp-row">
+      <div class="temp-lhs">
+        <span class="temp-value" id="temp">—</span>
+        <span class="temp-unit">°C</span>
+      </div>
+      <div class="temp-meta">
+        <div class="meta-lbl">Mis à jour</div>
+        <div class="meta-val" id="updatedAt">—</div>
+        <div class="meta-coords" id="coords">—</div>
+      </div>
+    </div>
+    <div class="unit-toggle">
+      <button class="unit-btn active" data-unit="kmh">km/h</button>
+      <button class="unit-btn" data-unit="ms">m/s</button>
+      <button class="unit-btn" data-unit="knots">nœuds</button>
+      <button class="unit-btn" data-unit="bf">Bft</button>
+    </div>
+  </div>
+
+  <!-- Wind + Compass card -->
+  <div class="card">
+
+    <!-- Wind stats: big, side by side -->
+    <div class="wind-stats-row">
+      <div class="wind-stat">
+        <div class="wstat-lbl">Vent moyen</div>
+        <div class="wstat-main">
+          <span class="wind-value" id="windSpeed">—</span>
+          <span class="wstat-unit" id="windUnitLabel">km/h</span>
+        </div>
+        <div class="wstat-dir">
+          <strong id="windDirText">—</strong>
+          <span style="color:var(--muted);margin-left:3px;">(<span id="windDirDeg">—</span>°)</span>
+        </div>
+      </div>
+      <div class="wind-stat">
+        <div class="wstat-lbl">Rafales</div>
+        <div class="wstat-main">
+          <span class="gust-value" id="gustSpeed">—</span>
+          <span class="wstat-unit" id="gustUnitLabel">km/h</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compass: full-width centered -->
+    <div class="compass-wrap">
+      <div class="compass-instrument" id="compassInstrument">
+
+        <!-- Bezel -->
+        <div class="c-bezel" id="cBezel"></div>
+
+        <!-- Rotating dial ring (canvas) -->
+        <div class="c-dial-ring" id="cDialRing">
+          <canvas id="dialCanvas" width="240" height="240"></canvas>
+        </div>
+
+        <!-- Glass -->
+        <div class="c-glass"></div>
+
+        <!-- Fixed north pointer -->
+        <div class="c-north-ptr"></div>
+
+        <!-- Wind direction arrow (SVG, rotates to wind direction relative to heading) -->
+        <div class="c-wind-arrow" id="cWindArrow" style="margin-left:-1px;margin-top:-90px;width:2px;height:90px;">
+          <svg width="22" height="22" viewBox="0 0 22 22" style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);">
+            <circle id="windDot" cx="11" cy="11" r="6" fill="rgba(255,255,255,0.65)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+          </svg>
+        </div>
+
+        <!-- Phone-direction needle (always points up = your facing direction) -->
+        <div class="c-needle" id="cNeedle">
+          <svg width="100" height="100" viewBox="0 0 100 100">
+            <!-- Tail -->
+            <path d="M50 50 L44 78 L50 72 L56 78 Z" fill="rgba(255,255,255,0.12)"/>
+            <!-- Head arrow pointing up -->
+            <path class="nb" id="needleHead"
+              d="M50 50 L44 22 L50 28 L56 22 Z"
+              fill="rgba(255,255,255,0.88)"
+            />
+            <!-- Center dot -->
+            <circle class="nd" id="needleDot" cx="50" cy="50" r="4.5"
+              fill="rgba(255,255,255,0.88)" stroke="rgba(0,0,0,0.25)" stroke-width="1"
+            />
+          </svg>
+        </div>
+
+        <div class="c-hub"></div>
+      </div>
+
+      <!-- Readout -->
+      <div class="compass-readout">
+        <div class="rdout-block">
+          <div class="rdout-val" id="headingVal">—°</div>
+          <div class="rdout-lbl" id="headingCard">orientation</div>
+        </div>
+        <div class="rdout-sep"></div>
+        <div class="rdout-block">
+          <div class="rdout-val" id="windDegVal">—°</div>
+          <div class="rdout-lbl">vent</div>
+        </div>
+        <div class="rdout-sep"></div>
+        <div class="state-pill" id="statePill">—</div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="btnRefresh" disabled>Rafraîchir</button>
+      <button class="btn btn-auto" id="btnAuto">⟳ Auto</button>
+      <button class="btn btn-demo" id="btnDemo">Démo</button>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="card history-card" id="historyCard">
+    <div class="history-header">
+      <span class="history-title">Historique</span>
+      <button class="history-clear" id="btnClearHistory">Effacer</button>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+  <div class="footer">WeatherWind · Open-Meteo · 0° = Nord</div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  // ── State ──
+  let lastCoords=null, windDirDeg=null, headingDeg=null;
+  let currentUnit='kmh', rawWindKmh=null, rawGustKmh=null;
+  let autoRefreshTimer=null, autoRefreshOn=false;
+  const historyData=[];
+  const TOLERANCE=30, AUTO_INTERVAL=60000;
+
+  const units = {
+    kmh:   { label:'km/h',  convert:v=>v,               decimals:0 },
+    ms:    { label:'m/s',   convert:v=>v/3.6,            decimals:1 },
+    knots: { label:'nœuds', convert:v=>v/1.852,          decimals:1 },
+    bf:    { label:'Bf',    convert:v=>kmhToBft(v),      decimals:0 },
+  };
+  function kmhToBft(v){ const s=[0,1,5,11,19,28,38,49,61,74,88,102,117]; for(let i=s.length-1;i>=0;i--)if(v>=s[i])return i; return 0; }
+  function cvWind(kmh){ if(kmh==null)return'—'; const u=units[currentUnit]; return u.convert(kmh).toFixed(u.decimals); }
+
+  const wrap = d => ((d%360)+360)%360;
+  function shortDiff(a,b){ let d=wrap(b)-wrap(a); if(d>180)d-=360; if(d<-180)d+=360; return d; }
+  function degToCard(d){
+    if(d==null||isNaN(d))return'—';
+    return['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'][Math.round((d%360)/22.5)%16];
+  }
+
+  function setStatus(msg,state=''){ $('statusText').textContent=msg; $('statusDot').className='status-dot'+(state?' '+state:''); }
+  function setError(msg){ const b=$('errorBox'); if(!msg){b.style.display='none';return;} b.style.display='block'; b.textContent=msg; }
+
+  // ══════════════════════════════════════
+  //  COMPASS DIAL — drawn on canvas
+  //  Detailed: major ticks every 10°, minor every 5°, micro every 1°
+  //  Labels: N/S/E/O at 90°, then 30° intervals
+  // ══════════════════════════════════════
+  function drawDial() {
+    const canvas = $('dialCanvas');
+    const ctx = canvas.getContext('2d');
+    const W=240, H=240, cx=W/2, cy=H/2, R=W/2;
+
+    ctx.clearRect(0,0,W,H);
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.clip();
+
+    // For each degree 0..359
+    for(let deg=0; deg<360; deg++){
+      const rad = (deg-90)*Math.PI/180;
+      const isMajor = deg%10===0;   // every 10°
+      const isMid   = deg%5===0;    // every 5°
+      // micro every 1° (already all)
+
+      const outerR = R-3;
+      const tickLen = isMajor ? 14 : isMid ? 8 : 4;
+      const innerR  = outerR - tickLen;
+
+      const x1=cx+outerR*Math.cos(rad), y1=cy+outerR*Math.sin(rad);
+      const x2=cx+innerR*Math.cos(rad), y2=cy+innerR*Math.sin(rad);
+
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+      ctx.strokeStyle = isMajor
+        ? 'rgba(255,255,255,0.50)'
+        : isMid
+          ? 'rgba(255,255,255,0.20)'
+          : 'rgba(255,255,255,0.07)';
+      ctx.lineWidth = isMajor ? 1.5 : isMid ? 1 : 0.75;
+      ctx.stroke();
+
+      // Labels every 10°
+      if(isMajor){
+        const isCardinal = deg%90===0;
+        const isHalf     = deg%30===0 && !isCardinal;
+        const cardinalLabels = {0:'N',90:'E',180:'S',270:'O'};
+        const degLabels = {30:'NNE',60:'NE',120:'SE',150:'SSE',210:'SSO',240:'SO',300:'NO',330:'NNO'};
+        // number labels for rest
+        const labelR = R - (isCardinal ? 30 : isHalf ? 28 : 26);
+        const lx=cx+labelR*Math.cos(rad), ly=cy+labelR*Math.sin(rad);
+
+        ctx.save();
+        ctx.translate(lx,ly);
+        ctx.rotate(rad+Math.PI/2);
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+
+        if(isCardinal){
+          ctx.font='600 12px "DM Mono",monospace';
+          ctx.fillStyle='rgba(255,255,255,0.90)';
+          ctx.fillText(cardinalLabels[deg],0,0);
+        } else if(isHalf && degLabels[deg]){
+          ctx.font='400 8px "DM Mono",monospace';
+          ctx.fillStyle='rgba(255,255,255,0.35)';
+          ctx.fillText(degLabels[deg],0,0);
+        } else {
+          // numeric every 10°
+          ctx.font='300 7px "DM Mono",monospace';
+          ctx.fillStyle='rgba(255,255,255,0.18)';
+          ctx.fillText(String(deg),0,0);
+        }
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+  drawDial();
+
+  // ── Needle state ──
+  function getNeedleState(){
+    if(headingDeg==null||isNaN(headingDeg)||windDirDeg==null||isNaN(windDirDeg)) return 'neutral';
+    const diff=Math.abs(shortDiff(headingDeg,windDirDeg));
+    if(diff<=TOLERANCE) return 'aligned';
+    if(Math.abs(diff-180)<=TOLERANCE) return 'against';
+    return 'neutral';
+  }
+
+  function applyNeedleState(state){
+    const head=$('needleHead'), dot=$('needleDot'), bezel=$('cBezel');
+    const windDotEl=$('windDot'), pill=$('statePill');
+
+    if(state==='aligned'){
+      head.setAttribute('fill','rgba(48,209,88,0.95)');
+      head.style.filter='drop-shadow(0 0 7px rgba(48,209,88,0.65))';
+      dot.setAttribute('fill','rgba(48,209,88,0.95)');
+      windDotEl.setAttribute('fill','rgba(48,209,88,0.85)');
+      windDotEl.setAttribute('stroke','rgba(48,209,88,0.25)');
+      bezel.style.borderColor='rgba(48,209,88,0.22)';
+      bezel.style.boxShadow='inset 0 0 40px rgba(0,0,0,0.7), 0 16px 48px rgba(0,0,0,0.5), 0 0 30px rgba(48,209,88,0.07)';
+      pill.textContent='↓ Sens du vent';
+      pill.className='state-pill aligned';
+    } else if(state==='against'){
+      head.setAttribute('fill','rgba(255,69,58,0.95)');
+      head.style.filter='drop-shadow(0 0 7px rgba(255,69,58,0.65))';
+      dot.setAttribute('fill','rgba(255,69,58,0.95)');
+      windDotEl.setAttribute('fill','rgba(255,69,58,0.85)');
+      windDotEl.setAttribute('stroke','rgba(255,69,58,0.25)');
+      bezel.style.borderColor='rgba(255,69,58,0.22)';
+      bezel.style.boxShadow='inset 0 0 40px rgba(0,0,0,0.7), 0 16px 48px rgba(0,0,0,0.5), 0 0 30px rgba(255,69,58,0.07)';
+      pill.textContent='↑ Contre le vent';
+      pill.className='state-pill against';
+    } else {
+      head.setAttribute('fill','rgba(255,255,255,0.88)');
+      head.style.filter='none';
+      dot.setAttribute('fill','rgba(255,255,255,0.88)');
+      windDotEl.setAttribute('fill','rgba(255,255,255,0.65)');
+      windDotEl.setAttribute('stroke','rgba(255,255,255,0.12)');
+      bezel.style.borderColor='rgba(255,255,255,0.10)';
+      bezel.style.boxShadow='inset 0 0 40px rgba(0,0,0,0.7), 0 16px 48px rgba(0,0,0,0.5)';
+      const diff = windDirDeg!=null && headingDeg!=null ? Math.round(Math.abs(shortDiff(headingDeg,windDirDeg))) : null;
+      pill.textContent = diff!=null ? `${diff}° d'écart` : '—';
+      pill.className = 'state-pill';
+    }
+  }
+
+  function updateCompass(){
+    const dialRing=$('cDialRing'), windArrow=$('cWindArrow');
+    const headingVal=$('headingVal'), headingCard=$('headingCard'), windDegVal=$('windDegVal');
+
+    // Update wind degree readout
+    windDegVal.textContent = windDirDeg!=null ? Math.round(windDirDeg)+'°' : '—°';
+
+    applyNeedleState(getNeedleState());
+
+    const h=headingDeg;
+    if(h==null||isNaN(h)){
+      headingVal.textContent='—°';
+      headingCard.textContent='orientation';
+      // show wind in absolute orientation
+      if(windDirDeg!=null&&!isNaN(windDirDeg)){
+        // arrow: from center upward = 0°, rotate to wind direction
+        windArrow.style.transform=`translateX(-50%) rotate(${wrap(windDirDeg)}deg)`;
+        windArrow.style.transformOrigin='50% 100%';
+      }
+      dialRing.style.transform='rotate(0deg)';
+      return;
+    }
+
+    const hw=wrap(h);
+    headingVal.textContent=Math.round(hw)+'°';
+    headingCard.textContent=degToCard(hw);
+
+    // Rotate dial opposite to heading so N mark on dial follows reality
+    dialRing.style.transform=`rotate(${-hw}deg)`;
+
+    // Wind arrow: relative to heading
+    if(windDirDeg!=null&&!isNaN(windDirDeg)){
+      const rel=wrap(windDirDeg-hw);
+      windArrow.style.transform=`translateX(-50%) rotate(${rel}deg)`;
+      windArrow.style.transformOrigin='50% 100%';
+    }
+  }
+
+  // ── Render weather ──
+  function renderWeather(data,lat,lon){
+    const cur=data?.current??{};
+    const temp=cur.temperature_2m??null;
+    rawWindKmh=cur.wind_speed_10m??null;
+    rawGustKmh=cur.wind_gusts_10m??null;
+    const wd=cur.wind_direction_10m??null;
+    windDirDeg=wd!=null?Number(wd):null;
+
+    const tempEl=$('temp');
+    tempEl.textContent=temp!=null?Number(temp).toFixed(1):'—';
+    tempEl.classList.remove('data-enter'); void tempEl.offsetWidth; tempEl.classList.add('data-enter');
+
+    $('windSpeed').textContent=cvWind(rawWindKmh);
+    $('gustSpeed').textContent=cvWind(rawGustKmh);
+    $('windUnitLabel').textContent=units[currentUnit].label;
+    $('gustUnitLabel').textContent=units[currentUnit].label;
+    $('windDirDeg').textContent=wd??'—';
+    $('windDirText').textContent=degToCard(wd);
+    $('updatedAt').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    $('coords').textContent=`${Number(lat).toFixed(4)}°, ${Number(lon).toFixed(4)}°`;
+    $('btnRefresh').disabled=false;
+
+    addHistory(temp,rawWindKmh,wd);
+    updateCompass();
+  }
+
+  async function getCityName(lat,lon){
+    try{
+      const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,{headers:{'Accept-Language':'fr'}});
+      const d=await r.json();
+      const city=d.address?.city||d.address?.town||d.address?.village||d.address?.municipality;
+      if(city){$('cityName').textContent=city;$('cityName').style.display='block';}
+    }catch{}
+  }
+
+  function addHistory(temp,windKmh,wd){
+    historyData.unshift({
+      time:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),
+      temp:temp!=null?Number(temp).toFixed(1)+'°C':'—',
+      wind:windKmh!=null?Math.round(windKmh)+' km/h':'—',
+      dir:degToCard(wd),
+    });
+    if(historyData.length>5)historyData.pop();
+    renderHistory();
+  }
+  function renderHistory(){
+    const card=$('historyCard');
+    if(!historyData.length){card.classList.remove('visible');return;}
+    card.classList.add('visible');
+    $('historyList').innerHTML=historyData.map(h=>`
+      <div class="history-item">
+        <span class="hist-time">${h.time}</span>
+        <span class="hist-temp">${h.temp}</span>
+        <span class="hist-wind">${h.wind}</span>
+        <span class="hist-dir">${h.dir}</span>
+      </div>`).join('');
+  }
+
+  async function fetchWeather(lat,lon){
+    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kmh&timezone=auto`,{headers:{Accept:'application/json'}});
+    if(!r.ok)throw new Error('Erreur API météo (HTTP '+r.status+')');
+    return r.json();
+  }
+
+  async function runWithCoords(lat,lon){
+    setError(null); setStatus('Récupération météo…','loading'); $('btnRefresh').disabled=true;
+    try{
+      const data=await fetchWeather(lat,lon);
+      renderWeather(data,lat,lon);
+      lastCoords={lat,lon};
+      setStatus('Données à jour','ok');
+    }catch(err){
+      setStatus('Erreur','error'); setError(err?.message||'Erreur inconnue'); $('btnRefresh').disabled=false;
+    }
+  }
+
+  function toggleAutoRefresh(){
+    autoRefreshOn=!autoRefreshOn;
+    const btn=$('btnAuto'),badge=$('autoRefreshBadge');
+    if(autoRefreshOn){
+      btn.classList.add('on'); btn.textContent='⟳ Stop'; badge.classList.add('active');
+      autoRefreshTimer=setInterval(()=>{if(lastCoords)runWithCoords(lastCoords.lat,lastCoords.lon);},AUTO_INTERVAL);
+    }else{
+      btn.classList.remove('on'); btn.textContent='⟳ Auto'; badge.classList.remove('active');
+      clearInterval(autoRefreshTimer);
+    }
+  }
+
+  function requestLocation(){
+    setError(null);
+    if(!('geolocation'in navigator)){setError('Géolocalisation non supportée.');return;}
+    setStatus('Demande de position…','loading');
+    navigator.geolocation.getCurrentPosition(
+      async pos=>{
+        setStatus('Position obtenue.','loading');
+        $('btnLocate').classList.add('active');
+        getCityName(pos.coords.latitude,pos.coords.longitude);
+        await runWithCoords(pos.coords.latitude,pos.coords.longitude);
+      },
+      err=>{
+        $('btnLocate').classList.remove('active');
+        const msgs={1:'Accès refusé. Autorise la localisation.',2:'Position indisponible.',3:'Délai dépassé.'};
+        setStatus('Position refusée','error'); setError(msgs[err.code]||'Impossible de récupérer la position.');
+      },
+      {enableHighAccuracy:true,timeout:12000,maximumAge:20000}
+    );
+  }
+
+  function handleOrientation(evt){
+    let h=typeof evt.webkitCompassHeading==='number'?evt.webkitCompassHeading:typeof evt.alpha==='number'?360-evt.alpha:null;
+    if(h==null||isNaN(h))return;
+    headingDeg=wrap(h); updateCompass();
+  }
+  async function enableCompass(){
+    try{
+      if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+        const res=await DeviceOrientationEvent.requestPermission();
+        if(res!=='granted')return;
+      }
+      window.addEventListener('deviceorientation',handleOrientation,true);
+    }catch(e){console.warn('Compass:',e);}
+  }
+
+  document.querySelectorAll('.unit-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.unit-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      currentUnit=btn.dataset.unit;
+      if(rawWindKmh!==null){
+        $('windSpeed').textContent=cvWind(rawWindKmh);
+        $('gustSpeed').textContent=cvWind(rawGustKmh);
+        $('windUnitLabel').textContent=units[currentUnit].label;
+        $('gustUnitLabel').textContent=units[currentUnit].label;
+      }
+    });
+  });
+
+  $('btnLocate').addEventListener('click',async()=>{await enableCompass();requestLocation();});
+  $('btnRefresh').addEventListener('click',()=>{if(lastCoords)runWithCoords(lastCoords.lat,lastCoords.lon);});
+  $('btnDemo').addEventListener('click',async()=>{await enableCompass();await runWithCoords(48.0794,7.3585);});
+  $('btnAuto').addEventListener('click',toggleAutoRefresh);
+  $('btnClearHistory').addEventListener('click',()=>{historyData.length=0;renderHistory();});
+</script>
+</body>
+</html>
